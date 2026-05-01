@@ -1,0 +1,127 @@
+# Multi-Agent Debate Workflow
+# Simulates a debate between different AI perspectives on a topic
+
+id: multi-agent-debate
+name: Multi-Agent Debate
+version: '1.0'
+description: Structured debate with opening statements, rebuttals, and synthesis
+entryPoint: define-topic
+
+nodes:
+  - id: define-topic
+    type: prompt
+    prompt: '{{topic}}'
+    outputVar: debate-topic
+
+  - id: gemini-opening
+    type: agent
+    agent:
+      provider: gemini
+      role: debater-pro
+    prompt: |
+      Debate Topic: {{debate-topic}}
+      
+      You are arguing IN FAVOR of this topic. Provide a compelling opening argument (200 words).
+      Present your strongest points clearly and persuasively.
+    dependsOn: [define-topic]
+    outputVar: gemini-opening
+
+  - id: chatgpt-opening
+    type: agent
+    agent:
+      provider: chatgpt
+      role: debater-con
+    prompt: |
+      Debate Topic: {{debate-topic}}
+      
+      You are arguing AGAINST this topic. Provide a compelling opening argument (200 words).
+      Present your strongest counter-arguments clearly and persuasively.
+    dependsOn: [define-topic]
+    outputVar: chatgpt-opening
+
+  - id: gemini-rebuttal
+    type: agent
+    agent:
+      provider: gemini
+      role: debater-pro
+    prompt: |
+      Debate Topic: {{debate-topic}}
+      
+      Your opponent argued:
+      {{chatgpt-opening}}
+      
+      Provide a rebuttal addressing their points (150 words).
+    dependsOn: [chatgpt-opening]
+    outputVar: gemini-rebuttal
+
+  - id: chatgpt-rebuttal
+    type: agent
+    agent:
+      provider: chatgpt
+      role: debater-con
+    prompt: |
+      Debate Topic: {{debate-topic}}
+      
+      Your opponent argued:
+      {{gemini-opening}}
+      
+      Provide a rebuttal addressing their points (150 words).
+    dependsOn: [gemini-opening]
+    outputVar: chatgpt-rebuttal
+
+  - id: synthesize
+    type: agent
+    agent:
+      provider: claude
+      role: moderator
+    prompt: |
+      As a neutral moderator, synthesize this debate:
+      
+      **Topic**: {{debate-topic}}
+      
+      **Pro Opening** (Gemini):
+      {{gemini-opening}}
+      
+      **Con Opening** (ChatGPT):
+      {{chatgpt-opening}}
+      
+      **Pro Rebuttal** (Gemini):
+      {{gemini-rebuttal}}
+      
+      **Con Rebuttal** (ChatGPT):
+      {{chatgpt-rebuttal}}
+      
+      Provide:
+      1. A balanced summary of both positions
+      2. Key points of agreement
+      3. Unresolved tensions
+      4. Synthesis conclusion
+    dependsOn: [gemini-rebuttal, chatgpt-rebuttal]
+    outputVar: synthesis
+
+  - id: save-debate
+    type: tool
+    tool:
+      name: fsWrite
+      params:
+        filePath: './debate-{{topic}}.md'
+        content: |
+          # Debate: {{debate-topic}}
+          
+          ## Pro (Gemini)
+          {{gemini-opening}}
+          
+          ## Con (ChatGPT)
+          {{chatgpt-opening}}
+          
+          ## Rebuttals
+          
+          ### Pro Rebuttal
+          {{gemini-rebuttal}}
+          
+          ### Con Rebuttal
+          {{chatgpt-rebuttal}}
+          
+          ## Moderator Synthesis (Claude)
+          {{synthesis}}
+    dependsOn: [synthesize]

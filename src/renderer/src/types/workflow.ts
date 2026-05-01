@@ -13,6 +13,7 @@ export interface WorkflowNode {
   agent?: {
     slotId?: string
     provider?: 'chatgpt' | 'gemini' | 'claude' | 'grok' | string
+    aiNodeId?: string
     role?: string
   }
   
@@ -38,6 +39,11 @@ export interface WorkflowNode {
   // Output handling
   outputVar?: string  // Store output to context variable
   outputTransform?: string // Transform output before passing to next node
+  position?: {
+    x: number
+    y: number
+  }
+  aiNodeId?: string
 }
 
 export interface WorkflowDefinition {

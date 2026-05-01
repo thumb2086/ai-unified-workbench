@@ -1,0 +1,68 @@
+.workflow-selector {
+  padding: 16px;
+  background: #151b2b;
+  border-radius: 8px;
+}
+
+.workflow-selector h4 {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  color: #94a3b8;
+}
+
+.workflow-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.workflow-item {
+  padding: 12px;
+  background: #1e293b;
+  border: 2px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.workflow-item:hover {
+  background: #2a3449;
+  border-color: #3d4a63;
+}
+
+.workflow-item.selected {
+  background: #2563eb;
+  border-color: #3b82f6;
+}
+
+.workflow-name {
+  font-weight: 500;
+  font-size: 14px;
+  color: #e0e6ed;
+  margin-bottom: 4px;
+}
+
+.workflow-item.selected .workflow-name {
+  color: white;
+}
+
+.workflow-meta {
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.workflow-item.selected .workflow-meta {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.workflow-meta span {
+  background: #0f172a;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.workflow-item.selected .workflow-meta span {
+  background: rgba(0, 0, 0, 0.3);
+}

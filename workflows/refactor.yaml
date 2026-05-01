@@ -1,0 +1,121 @@
+# Refactoring Workflow
+# Analyzes code and generates refactored version with improvements
+
+id: refactor
+name: Refactor & Improve
+version: '1.0'
+description: Analyze code, suggest improvements, and generate refactored version
+entryPoint: read-original
+
+nodes:
+  - id: read-original
+    type: tool
+    tool:
+      name: fsRead
+      params:
+        filePath: '{{filePath}}'
+    outputVar: original-code
+
+  - id: analyze
+    type: agent
+    agent:
+      provider: gemini
+      role: code-analyzer
+    prompt: |
+      Analyze this code and identify specific refactoring opportunities:
+      
+      ```
+      {{original-code}}
+      ```
+      
+      List 3-5 concrete improvements needed (e.g., extract functions, rename variables, simplify conditionals).
+      Be specific about what changes to make.
+    dependsOn: [read-original]
+    outputVar: analysis
+
+  - id: generate-refactored
+    type: agent
+    agent:
+      provider: claude
+      role: code-refactorer
+    prompt: |
+      Refactor this code based on the analysis:
+      
+      Original code:
+      ```
+      {{original-code}}
+      ```
+      
+      Analysis:
+      {{analysis}}
+      
+      Provide the complete refactored code with:
+      1. All improvements implemented
+      2. Brief inline comments explaining key changes
+      3. Same functionality preserved
+    dependsOn: [analyze]
+    outputVar: refactored-code
+
+  - id: review-refactor
+    type: agent
+    agent:
+      provider: chatgpt
+      role: code-reviewer
+    prompt: |
+      Review this refactoring:
+      
+      **Original:**
+      ```
+      {{original-code}}
+      ```
+      
+      **Refactored:**
+      ```
+      {{refactored-code}}
+      ```
+      
+      Verify:
+      1. Functionality is preserved
+      2. Code quality improved
+      3. No new bugs introduced
+      
+      Provide brief review.
+    dependsOn: [generate-refactored]
+    outputVar: review
+
+  - id: save-refactored
+    type: tool
+    tool:
+      name: fsWrite
+      params:
+        filePath: '{{outputPath}}'
+        content: |
+          // Refactored by AI Workbench
+          // Original: {{filePath}}
+          
+          {{refactored-code}}
+          
+          /*
+          Review Notes:
+          {{review}}
+          */
+    dependsOn: [review-refactor]
+
+  - id: save-analysis
+    type: tool
+    tool:
+      name: fsWrite
+      params:
+        filePath: '{{outputPath}}.analysis.md'
+        content: |
+          # Refactoring Analysis
+          
+          ## Original File
+          {{filePath}}
+          
+          ## Analysis
+          {{analysis}}
+          
+          ## Review
+          {{review}}
+    dependsOn: [review-refactor]

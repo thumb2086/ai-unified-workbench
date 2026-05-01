@@ -1,0 +1,328 @@
+.webview-pool {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #1e1e1e;
+  color: #e0e6ed;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* Chrome-style Tab Bar */
+.tab-bar {
+  display: flex;
+  align-items: flex-end;
+  background: #2d2d2d;
+  padding: 4px 4px 0;
+  border-bottom: 1px solid #3d3d3d;
+  min-height: 36px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tab-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.tabs-container {
+  display: flex;
+  align-items: flex-end;
+  flex: 1;
+  gap: 2px;
+  overflow-x: auto;
+}
+
+/* Chrome Tab Style */
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  min-width: 140px;
+  max-width: 220px;
+  background: #3d3d3d;
+  border-radius: 8px 8px 0 0;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.2s ease;
+  font-size: 13px;
+  color: #a0a0a0;
+  border: none;
+  margin-right: 2px;
+}
+
+.tab:hover {
+  background: #4d4d4d;
+  color: #d0d0d0;
+}
+
+.tab.active {
+  background: #1e1e1e;
+  color: #ffffff;
+  z-index: 1;
+}
+
+.tab.active::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: #4285f4;
+  border-radius: 8px 8px 0 0;
+}
+
+.tab-favicon {
+  font-size: 14px;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tab-title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.tab-status {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.tab-status.status-loading {
+  background: #f59e0b;
+  animation: pulse 1.5s infinite;
+}
+
+.tab-status.status-ready {
+  background: #10b981;
+}
+
+.tab-status.status-error {
+  background: #ef4444;
+}
+
+.tab-status.status-busy {
+  background: #3b82f6;
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.tab-close {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: #a0a0a0;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: all 0.2s;
+}
+
+.tab:hover .tab-close,
+.tab.active .tab-close {
+  opacity: 1;
+}
+
+.tab-close:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+
+/* Add Tab Button */
+.tab-add {
+  display: flex;
+  align-items: center;
+  margin-left: 4px;
+  position: relative;
+}
+
+.btn-add-tab {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: #a0a0a0;
+  font-size: 20px;
+  font-weight: 300;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.btn-add-tab:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.btn-add-tab:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Window Controls */
+.window-controls {
+  display: flex;
+  align-items: center;
+  padding-left: 8px;
+}
+
+.btn-manage {
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  color: #a0a0a0;
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-manage:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+/* Dropdown Menu */
+.add-dropdown {
+  position: relative;
+}
+
+.dropdown-menu {
+  display: none;
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  margin-top: 4px;
+  background: #2d2d2d;
+  border: 1px solid #3d3d3d;
+  border-radius: 8px;
+  min-width: 200px;
+  z-index: 9999;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+  flex-direction: column;
+  padding: 6px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.dropdown-menu.show {
+  display: flex;
+}
+
+.dropdown-menu button {
+  padding: 12px 14px;
+  background: transparent;
+  color: #d0d0d0;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  font-size: 14px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  white-space: nowrap;
+  width: 100%;
+}
+
+.dropdown-menu button:hover {
+  background: #4285f4;
+  color: white;
+}
+
+.provider-icon {
+  font-size: 18px;
+  width: 24px;
+  text-align: center;
+}
+
+.provider-name {
+  font-weight: 500;
+}
+
+.provider-icon {
+  font-size: 16px;
+}
+
+/* Tab Content Area */
+.tab-content {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  background: #1e1e1e;
+}
+
+.tab-pane {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.15s ease;
+}
+
+.tab-pane.active {
+  opacity: 1;
+  visibility: visible;
+  z-index: 1;
+}
+
+/* Empty State */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #666;
+  gap: 8px;
+}
+
+.empty-state p:first-child {
+  font-size: 16px;
+  color: #888;
+}
+
+.empty-state p:last-child {
+  font-size: 13px;
+  color: #555;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .tab {
+    min-width: 100px;
+    max-width: 160px;
+    padding: 6px 10px;
+  }
+  
+  .tab-title {
+    font-size: 12px;
+  }
+}

@@ -5,10 +5,12 @@ import type {
   NodeType,
   ToolResult
 } from '../types/workflow'
+import type { AiNode } from '../types/workbench'
 import { ParsedWorkflow, parseWorkflow, getNodesAtLevel } from './dag-parser'
 import { ExecutionContext, renderTemplate, evaluateCondition } from './execution-context'
 import type { WorkflowContext } from '../types/workflow'
-import { openBrowser, sendToBrowser, readFromBrowser } from '../services/api'
+import { openBrowser, sendToBrowser, readFromBrowser, sendChatRequest } from '../services/api'
+import { toProviderConfig } from '../utils/workbench'
 
 /**
  * Workflow Engine - Executes parsed workflows
@@ -18,6 +20,7 @@ export type NodeExecutor = (node: WorkflowNode, context: ExecutionContext) => Pr
 
 export interface WorkflowEngineConfig {
   executors: Partial<Record<NodeType, NodeExecutor>>
+  aiNodes?: AiNode[]
   variables?: Record<string, string>
   onNodeStart?: (nodeId: string, node: WorkflowNode) => void
   onNodeComplete?: (nodeId: string, result: unknown) => void
@@ -168,7 +171,7 @@ export class WorkflowEngine {
 /**
  * Create default executors that use IPC to communicate with main process
  */
-export function createDefaultExecutors(): Partial<Record<NodeType, NodeExecutor>> {
+export function createDefaultExecutors(aiNodes: AiNode[] = []): Partial<Record<NodeType, NodeExecutor>> {
   const api = window.aiWorkbench
 
   return {
@@ -183,9 +186,25 @@ export function createDefaultExecutors(): Partial<Record<NodeType, NodeExecutor>
         throw new Error('Agent node missing prompt')
       }
 
-      const provider = node.agent?.provider || 'chatgpt'
-      const slotId = await resolveAgentSessionId(node.agent?.slotId, provider)
-      
+      const aiNode = resolveAiNode(node, aiNodes)
+      if (aiNode?.kind === 'api') {
+        const result = await sendChatRequest(toProviderConfig(aiNode), node.prompt, {
+          conversationKey: aiNode.conversationKey || aiNode.id,
+        })
+        if (result.error) {
+          throw new Error(result.error)
+        }
+        return result.content
+      }
+
+      const provider = aiNode?.provider || node.agent?.provider || 'chatgpt'
+      const slotId = await resolveAgentSessionId(
+        aiNode?.sessionId || node.agent?.slotId,
+        provider,
+        aiNode?.webUrl,
+        aiNode?.name || provider,
+      )
+
       const result = await sendToBrowser(slotId, node.prompt)
 
       if (result.error) {
@@ -284,14 +303,14 @@ export function createDefaultExecutors(): Partial<Record<NodeType, NodeExecutor>
   }
 }
 
-async function resolveAgentSessionId(slotId: string | undefined, provider: string): Promise<string> {
+async function resolveAgentSessionId(slotId: string | undefined, provider: string, url?: string, providerName?: string): Promise<string> {
   if (slotId) {
     return slotId
   }
 
-  const providerUrl = DEFAULT_PROVIDER_URLS[provider] || DEFAULT_PROVIDER_URLS.chatgpt
+  const providerUrl = url || DEFAULT_PROVIDER_URLS[provider] || DEFAULT_PROVIDER_URLS.chatgpt
   const result = await openBrowser(provider, providerUrl, {
-    providerName: provider,
+    providerName: providerName || provider,
   })
 
   if (result.error || !result.sessionId) {
@@ -304,6 +323,12 @@ async function resolveAgentSessionId(slotId: string | undefined, provider: strin
 async function waitForBrowserResponse(sessionId: string, timeoutMs: number): Promise<void> {
   void sessionId
   await new Promise(resolve => setTimeout(resolve, timeoutMs))
+}
+
+function resolveAiNode(node: WorkflowNode, aiNodes: AiNode[] = []): AiNode | undefined {
+  const nodeId = node.aiNodeId || node.agent?.aiNodeId || node.agent?.slotId
+  if (!nodeId) return undefined
+  return aiNodes.find(aiNode => aiNode.id === nodeId)
 }
 
 const DEFAULT_PROVIDER_URLS: Record<string, string> = {
@@ -321,7 +346,7 @@ export async function executeWorkflow(
   callbacks?: Omit<WorkflowEngineConfig, 'executors'>
 ): Promise<WorkflowExecutionResult> {
   const engine = new WorkflowEngine({
-    executors: createDefaultExecutors(),
+    executors: createDefaultExecutors(callbacks?.aiNodes ?? []),
     ...callbacks
   })
 

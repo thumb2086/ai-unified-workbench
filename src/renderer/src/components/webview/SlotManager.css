@@ -1,0 +1,289 @@
+.slot-manager-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.slot-manager-modal {
+  background: #151b2b;
+  border: 1px solid #2a3449;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 600px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.slot-manager-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #2a3449;
+}
+
+.slot-manager-header h3 {
+  margin: 0;
+  font-size: 16px;
+  color: #e0e6ed;
+}
+
+.btn-close {
+  background: none;
+  border: none;
+  color: #64748b;
+  font-size: 24px;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.btn-close:hover {
+  color: #e0e6ed;
+}
+
+.slot-manager-content {
+  flex: 1;
+  overflow: auto;
+  padding: 20px;
+}
+
+.empty-message {
+  text-align: center;
+  color: #64748b;
+  padding: 40px;
+}
+
+.slot-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.slot-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px;
+  background: #1e293b;
+  border-radius: 6px;
+  margin-bottom: 8px;
+}
+
+.slot-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
+
+.slot-name-display {
+  font-weight: 500;
+  color: #e0e6ed;
+}
+
+.slot-provider {
+  font-size: 12px;
+  color: #64748b;
+  background: #0f172a;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.slot-status-badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  text-transform: uppercase;
+}
+
+.slot-status-badge.status-loading {
+  background: #f59e0b;
+  color: #000;
+}
+
+.slot-status-badge.status-ready {
+  background: #10b981;
+  color: #fff;
+}
+
+.slot-status-badge.status-error {
+  background: #ef4444;
+  color: #fff;
+}
+
+.slot-status-badge.status-busy {
+  background: #8b5cf6;
+  color: #fff;
+}
+
+.slot-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.slot-actions button {
+  padding: 6px 12px;
+  font-size: 12px;
+  background: #2a3449;
+  color: #e0e6ed;
+  border: 1px solid #3d4a63;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.slot-actions button:hover {
+  background: #3d4a63;
+}
+
+.slot-actions .btn-danger {
+  background: #dc2626;
+  border-color: #ef4444;
+}
+
+.slot-actions .btn-danger:hover {
+  background: #ef4444;
+}
+
+.edit-form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.edit-form input {
+  flex: 1;
+  padding: 6px 10px;
+  background: #0f172a;
+  border: 1px solid #3d4a63;
+  border-radius: 4px;
+  color: #e0e6ed;
+  font-size: 14px;
+}
+
+.edit-form button {
+  padding: 6px 12px;
+  font-size: 12px;
+}
+
+.edit-form button:first-of-type {
+  background: #2563eb;
+  color: white;
+  border: none;
+}
+
+.edit-form button:last-child:hover {
+  background: #4d5a73;
+}
+
+/* Chrome Import Section */
+.chrome-import-section {
+  padding: 16px;
+  border-top: 1px solid #2a3449;
+  background: #0f172a;
+}
+
+.chrome-import-section h4 {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+  color: #e0e6ed;
+}
+
+.import-desc {
+  font-size: 12px;
+  color: #64748b;
+  margin: 0 0 12px 0;
+}
+
+.import-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.import-select {
+  padding: 10px 12px;
+  background: #1e293b;
+  border: 1px solid #2a3449;
+  border-radius: 6px;
+  color: #e0e6ed;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.import-select:focus {
+  outline: none;
+  border-color: #3b82f6;
+}
+
+.import-select option {
+  background: #1e293b;
+  color: #e0e6ed;
+}
+
+.btn-import {
+  padding: 10px 20px;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-import:hover:not(:disabled) {
+  background: #2563eb;
+}
+
+.btn-import:disabled {
+  background: #2a3449;
+  color: #64748b;
+  cursor: not-allowed;
+}
+
+.import-message {
+  font-size: 13px;
+  margin: 8px 0 0 0;
+  padding: 8px;
+  border-radius: 4px;
+  background: #1e293b;
+}
+
+.no-chrome {
+  color: #64748b;
+  font-style: italic;
+  font-size: 13px;
+}
+
+.slot-manager-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  border-top: 1px solid #2a3449;
+}
+
+.slot-manager-footer p {
+  margin: 0;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.slot-manager-footer button {
+  padding: 8px 16px;
+  background: #2a3449;
+  color: #e0e6ed;
+  border: 1px solid #3d4a63;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.slot-manager-footer button:hover {
+  background: #3d4a63;
+}

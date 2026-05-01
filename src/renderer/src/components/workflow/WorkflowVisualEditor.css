@@ -1,0 +1,275 @@
+.workflow-visual-editor {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #0b0f19;
+  color: #e0e6ed;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.workflow-visual-editor.empty {
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: #64748b;
+}
+
+/* Toolbar */
+.editor-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: #151b2b;
+  border-bottom: 1px solid #2a3449;
+  gap: 16px;
+}
+
+.toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.editor-title {
+  font-weight: 600;
+  font-size: 16px;
+  color: #e0e6ed;
+}
+
+.editor-version {
+  font-size: 12px;
+  color: #64748b;
+  background: #2a3449;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.toolbar-center {
+  display: flex;
+  gap: 8px;
+  flex: 1;
+  justify-content: center;
+}
+
+.toolbar-right {
+  display: flex;
+  gap: 8px;
+}
+
+.tool-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: #2a3449;
+  color: #94a3b8;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.tool-btn:hover {
+  background: #3d4a63;
+  color: #e0e6ed;
+}
+
+.tool-btn.delete {
+  background: #dc2626;
+  color: white;
+}
+
+.tool-btn.delete:hover {
+  background: #b91c1c;
+}
+
+.tool-btn.cancel {
+  background: #64748b;
+  color: white;
+}
+
+/* Canvas */
+.editor-canvas {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  cursor: grab;
+}
+
+.editor-canvas:active {
+  cursor: grabbing;
+}
+
+.grid-background {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: 
+    linear-gradient(to right, #1e293b 1px, transparent 1px),
+    linear-gradient(to bottom, #1e293b 1px, transparent 1px);
+  background-size: 20px 20px;
+  opacity: 0.3;
+  pointer-events: none;
+}
+
+/* Connections Layer */
+.connections-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.connection-line {
+  stroke: #3d4a63;
+  stroke-width: 2;
+  fill: none;
+}
+
+.connection-line.drafting {
+  stroke: #3b82f6;
+  stroke-dasharray: 5, 5;
+  animation: dash 1s linear infinite;
+}
+
+@keyframes dash {
+  to {
+    stroke-dashoffset: -10;
+  }
+}
+
+/* Nodes */
+.workflow-node {
+  position: absolute;
+  border-radius: 8px;
+  padding: 12px;
+  cursor: move;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  z-index: 2;
+  user-select: none;
+  transition: box-shadow 0.2s, transform 0.1s;
+}
+
+.workflow-node:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  transform: translateY(-2px);
+}
+
+.workflow-node.selected {
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.5), 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.node-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.node-icon {
+  font-size: 16px;
+}
+
+.node-type {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+  opacity: 0.8;
+}
+
+.node-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: white;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Ports */
+.port {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: white;
+  border: 2px solid;
+  cursor: crosshair;
+  transition: transform 0.2s;
+}
+
+.port:hover {
+  transform: scale(1.3);
+}
+
+.port.input {
+  left: -6px;
+  top: 50%;
+  transform: translateY(-50%);
+  border-color: #10b981;
+}
+
+.port.output {
+  right: -6px;
+  top: 50%;
+  transform: translateY(-50%);
+  border-color: #f59e0b;
+  cursor: pointer;
+}
+
+/* Instructions */
+.editor-instructions {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  color: #64748b;
+  font-size: 14px;
+  pointer-events: none;
+}
+
+.editor-instructions p {
+  margin: 8px 0;
+}
+
+/* Status Bar */
+.editor-statusbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 16px;
+  background: #151b2b;
+  border-top: 1px solid #2a3449;
+  font-size: 12px;
+  color: #64748b;
+}
+
+/* Node Type Colors */
+.workflow-node.prompt {
+  border: 1px solid #3b82f6;
+}
+
+.workflow-node.agent {
+  border: 1px solid #10b981;
+}
+
+.workflow-node.tool {
+  border: 1px solid #f59e0b;
+}
+
+.workflow-node.condition {
+  border: 1px solid #8b5cf6;
+}
+
+.workflow-node.merge {
+  border: 1px solid #ec4899;
+}

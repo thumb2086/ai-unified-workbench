@@ -1,21 +1,31 @@
-import { app, BrowserWindow } from 'electron'
+// Use require for CommonJS compatibility
+const { app, BrowserWindow, ipcMain } = require('electron')
 import { join } from 'node:path'
+import { registerIpcHandlers, registerWebview } from './ipc-handlers'
 
 const isDev = !app.isPackaged
 
 function createWindow() {
   const win = new BrowserWindow({
-    width: 1440,
-    height: 960,
+    width: 1600,
+    height: 1000,
     minWidth: 1200,
     minHeight: 800,
     backgroundColor: '#0b0f19',
+    titleBarStyle: 'hiddenInset',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false
+      sandbox: false,
+      webSecurity: false, // Allow embedding AI sites
+      allowRunningInsecureContent: true
     }
+  })
+
+  // Handle webview attachment
+  win.webContents.on('did-attach-webview', (_: any, wc: any) => {
+    // Webview attached - will be registered via IPC with slotId
   })
 
   if (isDev) {
@@ -23,7 +33,18 @@ function createWindow() {
   } else {
     win.loadFile(join(__dirname, '../../dist/index.html'))
   }
+
+  return win
 }
+
+// Register IPC handlers before app ready
+registerIpcHandlers()
+
+// Additional IPC for webview registration from renderer
+ipcMain.handle('webview:register', (_event: any, slotId: string, webContentsId: number) => {
+  registerWebview(slotId, webContentsId)
+  return { success: true }
+})
 
 app.whenReady().then(() => {
   createWindow()
@@ -35,4 +56,11 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
+})
+
+// Security: Prevent new window creation
+app.on('web-contents-created', (_: any, contents: any) => {
+  contents.on('new-window', (event: any) => {
+    event.preventDefault()
+  })
 })

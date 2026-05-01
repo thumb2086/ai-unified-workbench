@@ -1,21 +1,57 @@
 {
   "name": "ai-workbench",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
-  "description": "Single-page multi-AI workbench for web-based AI tools",
+  "description": "AI Unified Workbench with multi-agent workflow orchestration",
+  "main": "dist-electron/main/index.js",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview"
-  },
-  "devDependencies": {
-    "@types/node": "^22.13.10",
-    "@vitejs/plugin-react": "^4.3.4",
-    "typescript": "^5.8.2",
-    "vite": "^6.2.0"
+    "dev:electron": "concurrently \"vite\" \"npm run electron\"",
+    "electron": "electron .",
+    "build": "vite build && npm run build:electron",
+    "build:electron": "tsc -p electron/tsconfig.json && electron-builder",
+    "preview": "vite preview",
+    "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "electron-store": "^10.0.0",
+    "js-yaml": "^4.1.0",
+    "uuid": "^10.0.0"
+  },
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^22.19.17",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@types/uuid": "^10.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^9.2.1",
+    "electron": "^31.0.0",
+    "electron-builder": "^25.0.0",
+    "typescript": "^5.8.2",
+    "vite": "^6.2.0"
+  },
+  "build": {
+    "appId": "com.ai-workbench.app",
+    "productName": "AI Unified Workbench",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "workflows/**/*"
+    ],
+    "mac": {
+      "target": "dmg"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
   }
 }
