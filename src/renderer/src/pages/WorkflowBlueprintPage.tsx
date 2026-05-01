@@ -17,8 +17,8 @@ const NODE_MIN_HEIGHT = 132
 const PORT_RADIUS = 11
 const DEFAULT_CANVAS_POINT = { x: 0, y: 0 }
 const NODE_TEMPLATES: BlueprintNodeType[] = ['prompt', 'agent', 'tool', 'condition', 'merge']
-const MIN_ZOOM = 0.6
-const MAX_ZOOM = 1.8
+const MIN_ZOOM = 0.25
+const MAX_ZOOM = 2
 const ZOOM_STEP = 0.1
 
 type DragState = {
@@ -29,6 +29,13 @@ type DragState = {
 
 type DraftConnection = {
   fromId: string
+} | null
+
+type PanState = {
+  startX: number
+  startY: number
+  originX: number
+  originY: number
 } | null
 
 export function WorkflowBlueprintPage() {
@@ -52,6 +59,8 @@ export function WorkflowBlueprintPage() {
   const [runState, setRunState] = useState<'idle' | 'running' | 'success' | 'error'>('idle')
   const [runOutput, setRunOutput] = useState('')
   const [zoom, setZoom] = useState(1)
+  const [pan, setPan] = useState({ x: 0, y: 0 })
+  const [panState, setPanState] = useState<PanState>(null)
 
   const workflow = useMemo(
     () => workflows.find(item => item.id === activeWorkflowId) ?? workflows[0] ?? null,
@@ -76,10 +85,18 @@ export function WorkflowBlueprintPage() {
   }, [workflow, updateWorkflow])
 
   useEffect(() => {
-    if (!dragState && !draftConnection) return
+    if (!dragState && !draftConnection && !panState) return
 
     const handlePointerMove = (event: PointerEvent) => {
-      const point = getCanvasPoint(event.clientX, event.clientY, canvasRef.current, zoom)
+      if (panState) {
+        setPan({
+          x: panState.originX + event.clientX - panState.startX,
+          y: panState.originY + event.clientY - panState.startY,
+        })
+        return
+      }
+
+      const point = getCanvasPoint(event.clientX, event.clientY, canvasRef.current, zoom, pan)
       if (!point) return
 
       setPointerOnCanvas(point)
@@ -111,6 +128,7 @@ export function WorkflowBlueprintPage() {
       setDragState(null)
       setDragPositions({})
       setDraftConnection(null)
+      setPanState(null)
     }
 
     window.addEventListener('pointermove', handlePointerMove)
@@ -120,7 +138,7 @@ export function WorkflowBlueprintPage() {
       window.removeEventListener('pointermove', handlePointerMove)
       window.removeEventListener('pointerup', handlePointerUp)
     }
-  }, [dragPositions, dragState, draftConnection, workflow, zoom])
+  }, [dragPositions, dragState, draftConnection, pan, panState, workflow, zoom])
 
   const updateCurrentWorkflow = (updater: (current: WorkflowBlueprint) => WorkflowBlueprint) => {
     if (!workflow) return
@@ -260,7 +278,7 @@ export function WorkflowBlueprintPage() {
   const startDrag = (nodeId: string, event: ReactPointerEvent<HTMLDivElement>) => {
     if (!workflow || event.button !== 0 || isInteractiveTarget(event.target)) return
     const node = workflow.nodes.find(item => item.id === nodeId)
-    const point = getCanvasPoint(event.clientX, event.clientY, canvasRef.current, zoom)
+    const point = getCanvasPoint(event.clientX, event.clientY, canvasRef.current, zoom, pan)
     if (!node || !point) return
 
     event.preventDefault()
@@ -273,7 +291,7 @@ export function WorkflowBlueprintPage() {
   }
 
   const startConnection = (nodeId: string, event: ReactPointerEvent<HTMLButtonElement>) => {
-    const point = getCanvasPoint(event.clientX, event.clientY, canvasRef.current, zoom)
+    const point = getCanvasPoint(event.clientX, event.clientY, canvasRef.current, zoom, pan)
     if (!point) return
     event.preventDefault()
     event.stopPropagation()
@@ -301,7 +319,7 @@ export function WorkflowBlueprintPage() {
   }
 
   const handleCanvasPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
-    const point = getCanvasPoint(event.clientX, event.clientY, canvasRef.current, zoom)
+    const point = getCanvasPoint(event.clientX, event.clientY, canvasRef.current, zoom, pan)
     if (!point) return
     setPointerOnCanvas(point)
   }
@@ -314,6 +332,44 @@ export function WorkflowBlueprintPage() {
     if (!event.ctrlKey && !event.metaKey) return
     event.preventDefault()
     setZoom(current => clampZoom(current + (event.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP)))
+  }
+
+  const startPan = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0 || isInteractiveTarget(event.target) || isNodeTarget(event.target)) return
+    event.preventDefault()
+    setSelectedNodeId(null)
+    setPanState({
+      startX: event.clientX,
+      startY: event.clientY,
+      originX: pan.x,
+      originY: pan.y,
+    })
+  }
+
+  const resetView = () => {
+    setZoom(1)
+    setPan({ x: 0, y: 0 })
+  }
+
+  const fitToView = () => {
+    if (!workflow || workflow.nodes.length === 0 || !canvasRef.current) {
+      resetView()
+      return
+    }
+
+    const bounds = getWorkflowBounds(workflow.nodes)
+    const rect = canvasRef.current.getBoundingClientRect()
+    const padding = 96
+    const nextZoom = clampZoom(Math.min(
+      (rect.width - padding) / bounds.width,
+      (rect.height - padding) / bounds.height,
+    ))
+
+    setZoom(nextZoom)
+    setPan({
+      x: (rect.width - bounds.width * nextZoom) / 2 - bounds.minX * nextZoom,
+      y: (rect.height - bounds.height * nextZoom) / 2 - bounds.minY * nextZoom,
+    })
   }
 
   const handleRunWorkflow = async () => {
@@ -397,6 +453,8 @@ export function WorkflowBlueprintPage() {
               <button onClick={() => handleZoom('out')}>-</button>
               <span className="pill subtle">{Math.round(zoom * 100)}%</span>
               <button onClick={() => handleZoom('in')}>+</button>
+              <button onClick={fitToView}>適合畫面</button>
+              <button onClick={resetView}>重置</button>
             </div>
             {NODE_TEMPLATES.map(type => (
               <button key={type} onClick={() => addNode(type)}>
@@ -438,15 +496,14 @@ export function WorkflowBlueprintPage() {
           className="workflow-canvas"
           onPointerMove={handleCanvasPointerMove}
           onWheel={handleWheel}
-          onPointerDown={event => {
-            if (event.target === event.currentTarget) {
-              setSelectedNodeId(null)
-            }
-          }}
+          onPointerDown={startPan}
         >
           <div
             className="canvas-viewport"
-            style={{ transform: `scale(${zoom})`, transformOrigin: 'top left' }}
+            style={{
+              transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+              transformOrigin: 'top left',
+            }}
           >
             <div className="grid-overlay" />
 
@@ -814,12 +871,13 @@ function getCanvasPoint(
   clientY: number,
   canvas: HTMLDivElement | null,
   zoom = 1,
+  pan = { x: 0, y: 0 },
 ) {
   if (!canvas) return null
   const rect = canvas.getBoundingClientRect()
   return {
-    x: (clientX - rect.left) / zoom,
-    y: (clientY - rect.top) / zoom,
+    x: (clientX - rect.left - pan.x) / zoom,
+    y: (clientY - rect.top - pan.y) / zoom,
   }
 }
 
@@ -864,6 +922,25 @@ function getAddLabel(t: (key: string) => string, type: BlueprintNodeType) {
 function isInteractiveTarget(target: EventTarget | null) {
   if (!(target instanceof HTMLElement)) return false
   return Boolean(target.closest('button, input, textarea, select, label, option, a'))
+}
+
+function isNodeTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) return false
+  return Boolean(target.closest('.workflow-node'))
+}
+
+function getWorkflowBounds(nodes: BlueprintNode[]) {
+  const minX = Math.min(...nodes.map(node => node.position.x))
+  const minY = Math.min(...nodes.map(node => node.position.y))
+  const maxX = Math.max(...nodes.map(node => node.position.x + NODE_WIDTH))
+  const maxY = Math.max(...nodes.map(node => node.position.y + NODE_MIN_HEIGHT + 46))
+
+  return {
+    minX,
+    minY,
+    width: Math.max(1, maxX - minX),
+    height: Math.max(1, maxY - minY),
+  }
 }
 
 function canAcceptIncoming(type: BlueprintNodeType) {

@@ -259,12 +259,18 @@
     linear-gradient(180deg, rgba(8, 12, 24, 0.92), rgba(10, 15, 32, 0.92));
   overflow: hidden;
   touch-action: none;
+  cursor: grab;
+}
+
+.workflow-canvas:active {
+  cursor: grabbing;
 }
 
 .canvas-viewport {
   position: relative;
   width: 2200px;
   min-height: 1400px;
+  overflow: visible;
 }
 
 .zoom-controls {
