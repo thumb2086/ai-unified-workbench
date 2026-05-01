@@ -128,6 +128,8 @@ export function ChatPanel() {
     const openResult = await openBrowser(node.provider, node.webUrl || 'https://chatgpt.com/', {
       providerName: node.name,
       sessionId: node.sessionId,
+      accountLabel: node.accountLabel,
+      accountKey: node.accountKey,
     })
     if (openResult.error || !openResult.sessionId) {
       throw new Error(openResult.error || 'Failed to open browser session')

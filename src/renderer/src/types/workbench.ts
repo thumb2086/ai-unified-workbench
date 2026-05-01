@@ -13,6 +13,8 @@ export interface AiNode {
   description?: string
   webUrl?: string
   sessionId?: string
+  accountLabel?: string
+  accountKey?: string
   conversationKey?: string
   apiFormat?: 'openai' | 'nvidia-nim' | 'anthropic' | 'custom'
   baseUrl?: string
@@ -272,6 +274,8 @@ export function createEmptyAiNode(kind: AiNodeKind = 'web'): AiNode {
     kind,
     provider: kind === 'web' ? 'chatgpt' : 'openai',
     enabled: true,
+    accountLabel: kind === 'web' ? '' : undefined,
+    accountKey: kind === 'web' ? '' : undefined,
     apiFormat: kind === 'api' ? 'openai' : undefined,
     baseUrl: kind === 'api' ? 'https://api.openai.com/v1' : undefined,
     model: kind === 'api' ? 'gpt-4o' : undefined,

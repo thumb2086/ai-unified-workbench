@@ -21,6 +21,8 @@ interface BrowserSessionWindow {
   providerId: string
   providerName: string
   url: string
+  accountLabel?: string
+  accountKey?: string
   window: any
   createdAt: number
   updatedAt: number
@@ -32,6 +34,8 @@ interface BrowserSessionSummary {
   providerId: string
   providerName: string
   url: string
+  accountLabel?: string
+  accountKey?: string
   createdAt: number
   updatedAt: number
   hasPrompt: boolean
@@ -321,13 +325,15 @@ interface BrowserOpenPayload {
   sessionId?: string
   providerName?: string
   forceNew?: boolean
+  accountLabel?: string
+  accountKey?: string
 }
 
 async function handleBrowserOpen(
   _event: IpcMainInvokeEvent,
   payload: BrowserOpenPayload
 ): Promise<{ sessionId?: string; providerId?: string; url?: string; status?: string; error?: string }> {
-  const { providerId, url, sessionId: requestedSessionId, providerName, forceNew } = payload
+  const { providerId, url, sessionId: requestedSessionId, providerName, forceNew, accountLabel, accountKey } = payload
 
   if (!providerId || !url) {
     return { error: 'Missing providerId or url' }
@@ -337,8 +343,8 @@ async function handleBrowserOpen(
 
   try {
     const session = forceNew
-      ? await createBrowserSession(sessionId, providerId, providerName || providerId, url)
-      : await getOrCreateBrowserSession(sessionId, providerId, providerName || providerId, url)
+      ? await createBrowserSession(sessionId, providerId, providerName || providerId, url, accountLabel, accountKey)
+      : await getOrCreateBrowserSession(sessionId, providerId, providerName || providerId, url, accountLabel, accountKey)
 
     await focusBrowserSession(session, url)
 
@@ -449,6 +455,8 @@ function handleBrowserList(): BrowserSessionSummary[] {
     providerId: session.providerId,
     providerName: session.providerName,
     url: session.url,
+    accountLabel: session.accountLabel,
+    accountKey: session.accountKey,
     createdAt: session.createdAt,
     updatedAt: session.updatedAt,
     hasPrompt: Boolean(session.lastPrompt),
@@ -460,6 +468,8 @@ async function createBrowserSession(
   providerId: string,
   providerName: string,
   url: string,
+  accountLabel?: string,
+  accountKey?: string,
 ): Promise<BrowserSessionWindow> {
   await closeBrowserSession(sessionId)
 
@@ -489,6 +499,8 @@ async function createBrowserSession(
     providerId,
     providerName,
     url,
+    accountLabel,
+    accountKey,
     window,
     createdAt: Date.now(),
     updatedAt: Date.now(),
@@ -509,12 +521,16 @@ async function getOrCreateBrowserSession(
   providerId: string,
   providerName: string,
   url: string,
+  accountLabel?: string,
+  accountKey?: string,
 ): Promise<BrowserSessionWindow> {
   const existing = browserSessions.get(sessionId)
   if (existing && !existing.window.isDestroyed()) {
     existing.providerId = providerId
     existing.providerName = providerName
     existing.url = url
+    existing.accountLabel = accountLabel
+    existing.accountKey = accountKey
     existing.updatedAt = Date.now()
     return existing
   }
@@ -523,6 +539,8 @@ async function getOrCreateBrowserSession(
   if (duplicate) {
     duplicate.providerName = providerName
     duplicate.url = url
+    duplicate.accountLabel = accountLabel
+    duplicate.accountKey = accountKey
     duplicate.updatedAt = Date.now()
     browserSessions.set(sessionId, duplicate)
     if (duplicate.id !== sessionId) {
@@ -532,7 +550,7 @@ async function getOrCreateBrowserSession(
     return duplicate
   }
 
-  return createBrowserSession(sessionId, providerId, providerName, url)
+  return createBrowserSession(sessionId, providerId, providerName, url, accountLabel, accountKey)
 }
 
 async function focusBrowserSession(session: BrowserSessionWindow, url: string): Promise<void> {

@@ -408,6 +408,40 @@
   gap: 14px;
 }
 
+.session-list {
+  display: grid;
+  gap: 12px;
+}
+
+.session-card {
+  border-radius: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(15, 23, 42, 0.82);
+  padding: 14px;
+  display: grid;
+  gap: 10px;
+}
+
+.session-card-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.session-card-head p,
+.session-card p {
+  margin: 4px 0 0;
+}
+
+.session-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  color: #94a3b8;
+  font-size: 12px;
+}
+
 .response-card,
 .run-result,
 .history-item {

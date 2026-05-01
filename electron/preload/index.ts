@@ -77,7 +77,7 @@ const aiWorkbenchAPI = {
   // Browser Session Management
   // ==========================================================================
 
-  async browserOpen(payload: { providerId: string; url: string; sessionId?: string; providerName?: string; forceNew?: boolean }): Promise<{ sessionId?: string; providerId?: string; url?: string; status?: string; error?: string }> {
+  async browserOpen(payload: { providerId: string; url: string; sessionId?: string; providerName?: string; forceNew?: boolean; accountLabel?: string; accountKey?: string }): Promise<{ sessionId?: string; providerId?: string; url?: string; status?: string; error?: string }> {
     return ipcRenderer.invoke('browser:open', payload)
   },
 
@@ -101,7 +101,7 @@ const aiWorkbenchAPI = {
     return ipcRenderer.invoke('browser:close-all')
   },
 
-  async browserList(): Promise<{ id: string; providerId: string; providerName: string; url: string; createdAt: number; updatedAt: number; hasPrompt: boolean }[]> {
+  async browserList(): Promise<{ id: string; providerId: string; providerName: string; url: string; accountLabel?: string; accountKey?: string; createdAt: number; updatedAt: number; hasPrompt: boolean }[]> {
     return ipcRenderer.invoke('browser:list')
   },
 

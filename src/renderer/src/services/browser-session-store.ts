@@ -9,9 +9,11 @@ export interface BrowserSessionRecord {
   createdAt: string
   lastActiveAt: string
   lastError?: string
+  accountLabel?: string
+  accountKey?: string
 }
 
-const STORAGE_KEY = 'ai-workbench.browser-sessions.v1'
+const STORAGE_KEY = 'ai-workbench.browser-sessions.v2'
 
 function canUseStorage(): boolean {
   return typeof window !== 'undefined' && !!window.localStorage
@@ -39,28 +41,40 @@ export function upsertBrowserSession(session: BrowserSessionRecord): BrowserSess
   const sessions = loadBrowserSessions()
   const next = [
     session,
-    ...sessions.filter(existing => existing.sessionId !== session.sessionId && existing.providerId !== session.providerId),
+    ...sessions.filter(existing => existing.sessionId !== session.sessionId),
   ]
   saveBrowserSessions(next)
   return next
 }
 
-export function removeBrowserSession(sessionIdOrProviderId: string): BrowserSessionRecord[] {
+export function removeBrowserSession(sessionId: string): BrowserSessionRecord[] {
   const sessions = loadBrowserSessions()
-  const next = sessions.filter(session => session.sessionId !== sessionIdOrProviderId && session.providerId !== sessionIdOrProviderId)
+  const next = sessions.filter(session => session.sessionId !== sessionId)
   saveBrowserSessions(next)
   return next
 }
 
-export function findBrowserSession(providerId: string): BrowserSessionRecord | undefined {
-  return loadBrowserSessions().find(session => session.providerId === providerId)
+export function findBrowserSession(sessionId: string): BrowserSessionRecord | undefined {
+  return loadBrowserSessions().find(session => session.sessionId === sessionId)
+}
+
+export function findBrowserSessionsByProvider(providerId: string): BrowserSessionRecord[] {
+  return loadBrowserSessions()
+    .filter(session => session.providerId === providerId)
+    .sort((a, b) => b.lastActiveAt.localeCompare(a.lastActiveAt))
 }
 
 export function getMostRecentBrowserSession(): BrowserSessionRecord | undefined {
   return loadBrowserSessions().sort((a, b) => b.lastActiveAt.localeCompare(a.lastActiveAt))[0]
 }
 
-export function createBrowserSessionRecord(providerId: string, providerName: string, url: string, sessionId?: string): BrowserSessionRecord {
+export function createBrowserSessionRecord(
+  providerId: string,
+  providerName: string,
+  url: string,
+  sessionId?: string,
+  account?: { label?: string; key?: string },
+): BrowserSessionRecord {
   const now = new Date().toISOString()
   return {
     sessionId: sessionId || `session_${providerId}_${Date.now()}`,
@@ -70,5 +84,7 @@ export function createBrowserSessionRecord(providerId: string, providerName: str
     status: 'loading',
     createdAt: now,
     lastActiveAt: now,
+    accountLabel: account?.label?.trim() || undefined,
+    accountKey: account?.key?.trim() || undefined,
   }
 }

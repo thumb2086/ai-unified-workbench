@@ -6,7 +6,6 @@ import {
 } from './api-context-store'
 import {
   createBrowserSessionRecord,
-  findBrowserSession,
   loadBrowserSessions,
   removeBrowserSession,
   upsertBrowserSession,
@@ -71,20 +70,15 @@ export async function testConnection(provider: ProviderConfig): Promise<{ succes
 export async function openBrowser(
   providerId: string,
   url: string,
-  options?: { providerName?: string; sessionId?: string; forceNew?: boolean },
+  options?: { providerName?: string; sessionId?: string; forceNew?: boolean; accountLabel?: string; accountKey?: string },
 ): Promise<{ sessionId?: string; error?: string }> {
   try {
-    const existing = !options?.forceNew
-      ? (options?.sessionId
-        ? loadBrowserSessions().find(session => session.sessionId === options.sessionId)
-        : findBrowserSession(providerId))
-      : undefined
-
-    const session = existing ?? createBrowserSessionRecord(
+    const session = createBrowserSessionRecord(
       providerId,
       options?.providerName || providerId,
       url,
       options?.sessionId,
+      { label: options?.accountLabel, key: options?.accountKey },
     )
 
     upsertBrowserSession({
@@ -100,6 +94,8 @@ export async function openBrowser(
       sessionId: session.sessionId,
       providerName: options?.providerName || providerId,
       forceNew: options?.forceNew,
+      accountLabel: options?.accountLabel,
+      accountKey: options?.accountKey,
     })
 
     if (data.error || !data.sessionId) {
@@ -119,13 +115,15 @@ export async function openBrowser(
       url: data.url || url,
       status: 'ready',
       lastActiveAt: new Date().toISOString(),
+      accountLabel: options?.accountLabel || session.accountLabel,
+      accountKey: options?.accountKey || session.accountKey,
     })
 
     return { sessionId: data.sessionId || session.sessionId }
   } catch (err: any) {
     const fallbackSession = options?.sessionId
       ? loadBrowserSessions().find(session => session.sessionId === options.sessionId)
-      : findBrowserSession(providerId)
+      : undefined
 
     if (fallbackSession) {
       upsertBrowserSession({
@@ -268,7 +266,7 @@ export async function closeAllBrowsers(): Promise<void> {
   }
 }
 
-async function invokeBrowserOpen(payload: { providerId: string; url: string; sessionId?: string; providerName?: string; forceNew?: boolean }): Promise<{ sessionId?: string; providerId?: string; url?: string; status?: string; error?: string }> {
+async function invokeBrowserOpen(payload: { providerId: string; url: string; sessionId?: string; providerName?: string; forceNew?: boolean; accountLabel?: string; accountKey?: string }): Promise<{ sessionId?: string; providerId?: string; url?: string; status?: string; error?: string }> {
   if (typeof window === 'undefined' || !window.aiWorkbench?.browserOpen) {
     return { error: 'Browser session API is unavailable' }
   }

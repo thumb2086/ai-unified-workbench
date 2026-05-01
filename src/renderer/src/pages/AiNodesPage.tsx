@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { useWorkbench } from '../hooks/useWorkbenchState'
 import { useI18n } from '../hooks/useI18n'
 import type { AiNode } from '../types/workbench'
-import { openBrowser } from '../services/api'
+import { closeBrowserSession, openBrowser } from '../services/api'
+import { BrowserSessionRecord, loadBrowserSessions } from '../services/browser-session-store'
 
 const PROVIDER_OPTIONS = [
   { value: 'chatgpt', label: 'ChatGPT' },
@@ -37,12 +38,17 @@ export function AiNodesPage() {
     [aiNodes, activeAiNodeId],
   )
   const [headerText, setHeaderText] = useState('')
+  const [sessions, setSessions] = useState<BrowserSessionRecord[]>(() => loadBrowserSessions())
 
   useEffect(() => {
     if (!activeNode) return
     setActiveAiNodeId(activeNode.id)
     setHeaderText(stringifyHeaders(activeNode.headers))
   }, [activeNode, setActiveAiNodeId])
+
+  useEffect(() => {
+    setSessions(loadBrowserSessions())
+  }, [activeNode?.id, activeNode?.sessionId])
 
   const handleUpdate = (patch: Partial<AiNode>) => {
     if (!activeNode) return
@@ -61,12 +67,14 @@ export function AiNodesPage() {
     }
   }
 
-  const handleOpenWeb = async () => {
+  const handleOpenWeb = async (fresh = false) => {
     if (!activeNode || activeNode.kind !== 'web') return
     const url = activeNode.webUrl || 'https://chatgpt.com/'
     const result = await openBrowser(activeNode.provider, url, {
       providerName: activeNode.name,
-      sessionId: activeNode.sessionId,
+      sessionId: fresh ? undefined : activeNode.sessionId,
+      accountLabel: activeNode.accountLabel,
+      accountKey: activeNode.accountKey,
     })
 
     if (result.error) {
@@ -79,8 +87,31 @@ export function AiNodesPage() {
         sessionId: result.sessionId,
         webUrl: url,
       })
+      setSessions(loadBrowserSessions())
     }
   }
+
+  const handleOpenSession = async (session: BrowserSessionRecord) => {
+    const result = await openBrowser(session.providerId, session.url, {
+      providerName: session.providerName,
+      sessionId: session.sessionId,
+      accountLabel: session.accountLabel,
+      accountKey: session.accountKey,
+    })
+    if (!result.error) {
+      setSessions(loadBrowserSessions())
+    }
+  }
+
+  const handleCloseSession = async (session: BrowserSessionRecord) => {
+    await closeBrowserSession(session.sessionId)
+    setSessions(loadBrowserSessions())
+    if (activeNode?.sessionId === session.sessionId) {
+      handleUpdate({ sessionId: undefined })
+    }
+  }
+
+  const currentSessions = sessions.filter(session => session.providerId === activeNode?.provider)
 
   return (
     <div className="page-grid nodes-page">
@@ -128,7 +159,7 @@ export function AiNodesPage() {
               <div>
                 <h2>{activeNode.name}</h2>
                 <p className="muted">
-                  {t('common.type')}: {activeNode.kind.toUpperCase()} · {t('common.provider')}: {activeNode.provider}
+                  類型：{activeNode.kind.toUpperCase()} · 供應商：{activeNode.provider}
                 </p>
               </div>
               <div className="row">
@@ -154,6 +185,8 @@ export function AiNodesPage() {
                     kind: event.target.value as AiNode['kind'],
                     webUrl: event.target.value === 'web' ? activeNode.webUrl : undefined,
                     sessionId: event.target.value === 'web' ? activeNode.sessionId : undefined,
+                    accountLabel: event.target.value === 'web' ? activeNode.accountLabel : undefined,
+                    accountKey: event.target.value === 'web' ? activeNode.accountKey : undefined,
                     conversationKey: event.target.value === 'web' ? activeNode.conversationKey : undefined,
                     baseUrl: event.target.value === 'api' ? activeNode.baseUrl || 'https://api.openai.com/v1' : undefined,
                     apiFormat: event.target.value === 'api' ? activeNode.apiFormat || 'openai' : undefined,
@@ -199,8 +232,28 @@ export function AiNodesPage() {
 
             {activeNode.kind === 'web' ? (
               <div className="card stack">
-                <div className="section-title">{t('nodes.web')} · {t('nodes.webStatus')}</div>
+                <div className="section-title">Web · Web session</div>
                 <p className="muted">{t('nodes.openWebHint')}</p>
+
+                <div className="form-grid">
+                  <label>
+                    <span>帳號標籤</span>
+                    <input
+                      value={activeNode.accountLabel || ''}
+                      onChange={event => handleUpdate({ accountLabel: event.target.value })}
+                      placeholder="例如：工作帳號 / 個人帳號"
+                    />
+                  </label>
+                  <label>
+                    <span>帳號識別</span>
+                    <input
+                      value={activeNode.accountKey || ''}
+                      onChange={event => handleUpdate({ accountKey: event.target.value })}
+                      placeholder="例如：email 或帳號 id"
+                    />
+                  </label>
+                </div>
+
                 <div className="row">
                   <span className={`pill ${activeNode.sessionId ? 'done' : 'warning'}`}>
                     {activeNode.sessionId ? t('nodes.opened') : t('nodes.notOpened')}
@@ -209,6 +262,7 @@ export function AiNodesPage() {
                     {activeNode.sessionId ? t('nodes.reopenWeb') : t('nodes.openNow')}
                   </button>
                 </div>
+
                 <label>
                   <span>{t('nodes.webUrl')}</span>
                   <input
@@ -233,6 +287,49 @@ export function AiNodesPage() {
                     placeholder="conversation key"
                   />
                 </label>
+
+                <div className="stack">
+                  <div className="section-title">Web 分頁管理</div>
+                  <div className="row">
+                    <button onClick={() => setSessions(loadBrowserSessions())}>重新整理</button>
+                    <button className="primary" onClick={() => void handleOpenWeb(true)}>
+                      新增分頁
+                    </button>
+                  </div>
+
+                  <div className="session-list">
+                    {currentSessions.length === 0 ? (
+                      <div className="empty-state">
+                        <p>目前沒有可用的 web 分頁</p>
+                      </div>
+                    ) : (
+                      currentSessions.map(session => (
+                        <div key={session.sessionId} className="session-card">
+                          <div className="session-card-head">
+                            <div>
+                              <strong>{session.providerName}</strong>
+                              <p className="muted">
+                                {session.accountLabel || session.accountKey || '未命名帳號'}
+                              </p>
+                            </div>
+                            <span className={`pill ${session.status}`}>{session.status}</span>
+                          </div>
+                          <p className="muted">{session.url}</p>
+                          <div className="session-card-meta">
+                            <span>{session.sessionId}</span>
+                            <span>{formatTime(session.lastActiveAt)}</span>
+                          </div>
+                          <div className="row">
+                            <button onClick={() => void handleOpenSession(session)}>切換分頁</button>
+                            <button className="danger" onClick={() => void handleCloseSession(session)}>
+                              關閉分頁
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
               </div>
             ) : (
               <div className="card stack">
@@ -316,4 +413,15 @@ function getNodeStatusTone(node: AiNode): 'ok' | 'warning' | 'off' {
   if (!node.enabled) return 'off'
   if (node.kind === 'web' && !node.sessionId) return 'warning'
   return 'ok'
+}
+
+function formatTime(iso: string): string {
+  try {
+    return new Intl.DateTimeFormat('zh-Hant', {
+      dateStyle: 'short',
+      timeStyle: 'short',
+    }).format(new Date(iso))
+  } catch {
+    return iso
+  }
 }

@@ -203,6 +203,8 @@ export function createDefaultExecutors(aiNodes: AiNode[] = []): Partial<Record<N
         provider,
         aiNode?.webUrl,
         aiNode?.name || provider,
+        aiNode?.accountLabel,
+        aiNode?.accountKey,
       )
 
       const result = await sendToBrowser(slotId, node.prompt)
@@ -303,7 +305,14 @@ export function createDefaultExecutors(aiNodes: AiNode[] = []): Partial<Record<N
   }
 }
 
-async function resolveAgentSessionId(slotId: string | undefined, provider: string, url?: string, providerName?: string): Promise<string> {
+async function resolveAgentSessionId(
+  slotId: string | undefined,
+  provider: string,
+  url?: string,
+  providerName?: string,
+  accountLabel?: string,
+  accountKey?: string,
+): Promise<string> {
   if (slotId) {
     return slotId
   }
@@ -311,6 +320,8 @@ async function resolveAgentSessionId(slotId: string | undefined, provider: strin
   const providerUrl = url || DEFAULT_PROVIDER_URLS[provider] || DEFAULT_PROVIDER_URLS.chatgpt
   const result = await openBrowser(provider, providerUrl, {
     providerName: providerName || provider,
+    accountLabel,
+    accountKey,
   })
 
   if (result.error || !result.sessionId) {
