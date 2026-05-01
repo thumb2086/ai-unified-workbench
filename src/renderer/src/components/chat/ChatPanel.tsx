@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useWorkbench } from '../../hooks/useWorkbenchState'
 import { useI18n } from '../../hooks/useI18n'
 import { useStorage } from '../../hooks/useStorage'
-import type { AiNode, ChatMode, ChatMessage } from '../../types/workbench'
+import type { AiNode, ChatMessage, ChatMode } from '../../types/workbench'
 import { executeWorkflow } from '../../engine/workflow-engine'
 import { toProviderConfig, toWorkflowDefinition } from '../../utils/workbench'
 import { openBrowser, readFromBrowser, sendChatRequest, sendToBrowser } from '../../services/api'
@@ -31,11 +31,21 @@ export function ChatPanel() {
     () => chatThreads.find(thread => thread.id === activeChatThreadId) ?? null,
     [chatThreads, activeChatThreadId],
   )
-  const [mode, setMode] = useStorage<ChatMode>('ai-workbench.chat.mode.v2', activeThread?.selection.mode ?? 'broadcast')
-  const [selectedIds, setSelectedIds] = useStorage<string[]>('ai-workbench.chat.providers.v2', activeThread?.selection.providerIds ?? aiNodes.slice(0, 2).map(node => node.id))
-  const [workflowId, setWorkflowId] = useStorage<string>('ai-workbench.chat.workflow.v2', activeThread?.selection.workflowId ?? activeWorkflowId ?? '')
+
+  const [mode, setMode] = useStorage<ChatMode>(
+    'ai-workbench.chat.mode.v2',
+    activeThread?.selection.mode ?? 'broadcast',
+  )
+  const [selectedIds, setSelectedIds] = useStorage<string[]>(
+    'ai-workbench.chat.providers.v2',
+    activeThread?.selection.providerIds ?? aiNodes.slice(0, 2).map(node => node.id),
+  )
+  const [workflowId, setWorkflowId] = useStorage<string>(
+    'ai-workbench.chat.workflow.v2',
+    activeThread?.selection.workflowId ?? activeWorkflowId ?? '',
+  )
   const [prompt, setPrompt] = useStorage<string>('ai-workbench.chat.prompt.v2', activeThread?.prompt ?? '')
-  const [topic, setTopic] = useStorage<string>('ai-workbench.chat.topic.v2', '')
+  const [topic, setTopic] = useStorage<string>('ai-workbench.chat.topic.v2', activeThread?.topic ?? '')
   const [panelStates, setPanelStates] = useState<Record<string, PanelState>>({})
   const [workflowResult, setWorkflowResult] = useState<string>('')
   const [workflowStatus, setWorkflowStatus] = useState<'idle' | 'running' | 'success' | 'error'>('idle')
@@ -47,13 +57,21 @@ export function ChatPanel() {
     setSelectedIds(activeThread.selection.providerIds)
     setWorkflowId(activeThread.selection.workflowId ?? '')
     setPrompt(activeThread.prompt)
-  }, [activeThread, setActiveChatThreadId, setMode, setSelectedIds, setWorkflowId, setPrompt])
+    setTopic(activeThread.topic ?? '')
+  }, [activeThread, setActiveChatThreadId, setMode, setSelectedIds, setWorkflowId, setPrompt, setTopic])
 
   useEffect(() => {
     if (!workflowId && activeWorkflowId) {
       setWorkflowId(activeWorkflowId)
     }
-  }, [workflowId, activeWorkflowId])
+  }, [workflowId, activeWorkflowId, setWorkflowId])
+
+  useEffect(() => {
+    const preset = getPresetWorkflowId(mode)
+    if (preset && workflowId !== preset && workflows.some(workflow => workflow.id === preset)) {
+      setWorkflowId(preset)
+    }
+  }, [mode, workflowId, workflows, setWorkflowId])
 
   const selectedNodes = useMemo(
     () => selectedIds.map(id => aiNodes.find(node => node.id === id)).filter(Boolean) as AiNode[],
@@ -67,18 +85,29 @@ export function ChatPanel() {
         ...thread,
         selection: { providerIds: selectedIds, mode, workflowId },
         prompt,
+        topic,
         updatedAt: now,
       }))
       return activeThread.id
     }
+
     return addChatThread({
       selection: { providerIds: selectedIds, mode, workflowId },
       prompt,
+      topic,
     }).id
   }
 
   const toggleNode = (nodeId: string) => {
     setSelectedIds(prev => prev.includes(nodeId) ? prev.filter(id => id !== nodeId) : [...prev, nodeId])
+  }
+
+  const setWorkflowMode = (nextMode: ChatMode) => {
+    setMode(nextMode)
+    const preset = getPresetWorkflowId(nextMode)
+    if (preset) {
+      setWorkflowId(preset)
+    }
   }
 
   const setPanelState = (nodeId: string, next: PanelState) => {
@@ -114,6 +143,7 @@ export function ChatPanel() {
 
     const sendResult = await sendToBrowser(openResult.sessionId, message)
     if (sendResult.error) throw new Error(sendResult.error)
+
     await new Promise(resolve => setTimeout(resolve, 1200))
     const readResult = await readFromBrowser(openResult.sessionId)
     if (readResult.error) throw new Error(readResult.error)
@@ -122,6 +152,7 @@ export function ChatPanel() {
 
   const handleDirectSend = async () => {
     if (!selectedNodes.length || !prompt.trim()) return
+
     const threadId = ensureThread()
     const now = new Date().toISOString()
     const userMessage: ChatMessage = {
@@ -140,11 +171,19 @@ export function ChatPanel() {
 
     setPanelStates(Object.fromEntries(selectedNodes.map(node => [node.id, { status: 'working', content: '' }])))
 
-    if (mode === 'relay') {
-      let current = prompt
-      for (const node of selectedNodes) {
+    if (mode === 'relay' || mode === 'subagent') {
+      let currentPrompt = prompt
+      for (const [index, node] of selectedNodes.entries()) {
         try {
-          const content = await sendToNode(node, current)
+          const content = await sendToNode(
+            node,
+            mode === 'relay'
+              ? currentPrompt
+              : index === 0
+                ? `你是主代理，請先整理任務並輸出可交辦的摘要：\n${currentPrompt}`
+                : `你是子代理，請根據主代理的輸出補充細節：\n${currentPrompt}`,
+          )
+
           setPanelState(node.id, { status: 'done', content })
           const assistantMessage: ChatMessage = {
             id: `msg-${Date.now()}-${node.id}`,
@@ -158,12 +197,17 @@ export function ChatPanel() {
             messages: [...thread.messages, assistantMessage],
             updatedAt: new Date().toISOString(),
           }))
-          current = `${current}\n\n${node.name}: ${content}`
+
+          currentPrompt = mode === 'relay'
+            ? `${currentPrompt}\n\n${node.name}：\n${content}`
+            : `${content}\n\n請繼續補充下一步。`
         } catch (error) {
           const message = error instanceof Error ? error.message : 'Request failed'
           setPanelState(node.id, { status: 'error', content: '', error: message })
+          break
         }
       }
+
       setPrompt('')
       return
     }
@@ -176,9 +220,10 @@ export function ChatPanel() {
             const content = await sendToNode(
               node,
               round === 0
-                ? `You are in a debate. Topic: ${debateTopic}. Give your position.`
-              : `Continue the debate on: ${debateTopic}. Respond to the other participants.`
+                ? `請針對下列主題提出第一輪觀點：${debateTopic}`
+                : `請根據上輪內容繼續反駁或補充：${debateTopic}`,
             )
+
             setPanelState(node.id, { status: 'done', content })
             const assistantMessage: ChatMessage = {
               id: `msg-${Date.now()}-${node.id}-${round}`,
@@ -198,6 +243,7 @@ export function ChatPanel() {
           }
         }
       }
+
       setPrompt('')
       return
     }
@@ -276,14 +322,17 @@ export function ChatPanel() {
             <p className="muted">{t('chat.subtitle')}</p>
           </div>
           <div className="row">
-            <button className={mode === 'broadcast' ? 'primary' : ''} onClick={() => setMode('broadcast')}>
+            <button className={mode === 'broadcast' ? 'primary' : ''} onClick={() => setWorkflowMode('broadcast')}>
               {t('chat.broadcast')}
             </button>
-            <button className={mode === 'relay' ? 'primary' : ''} onClick={() => setMode('relay')}>
+            <button className={mode === 'relay' ? 'primary' : ''} onClick={() => setWorkflowMode('relay')}>
               {t('chat.relay')}
             </button>
-            <button className={mode === 'debate' ? 'primary' : ''} onClick={() => setMode('debate')}>
+            <button className={mode === 'debate' ? 'primary' : ''} onClick={() => setWorkflowMode('debate')}>
               {t('chat.debate')}
+            </button>
+            <button className={mode === 'subagent' ? 'primary' : ''} onClick={() => setWorkflowMode('subagent')}>
+              {t('chat.subagent')}
             </button>
           </div>
         </div>
@@ -371,7 +420,7 @@ export function ChatPanel() {
             <h3>{t('chat.workflowRun')}</h3>
             <span className={`pill ${workflowStatus}`}>{workflowStatus}</span>
           </div>
-          <pre className="workflow-output">{workflowResult || 'No workflow result yet.'}</pre>
+          <pre className="workflow-output">{workflowResult || '尚未執行工作流。'}</pre>
         </section>
 
         {activeThread && (
@@ -383,7 +432,7 @@ export function ChatPanel() {
             <div className="history-list">
               {activeThread.messages.slice(-6).map(message => (
                 <div key={message.id} className={`history-item ${message.role}`}>
-                  <strong>{message.role}</strong>
+                  <strong>{message.role === 'user' ? '使用者' : 'AI 回應'}</strong>
                   <p>{message.content}</p>
                 </div>
               ))}
@@ -393,4 +442,19 @@ export function ChatPanel() {
       </main>
     </div>
   )
+}
+
+function getPresetWorkflowId(mode: ChatMode): string {
+  switch (mode) {
+    case 'broadcast':
+      return 'broadcast-workflow'
+    case 'relay':
+      return 'relay-workflow'
+    case 'debate':
+      return 'debate-workflow'
+    case 'subagent':
+      return 'subagent-workflow'
+    default:
+      return ''
+  }
 }

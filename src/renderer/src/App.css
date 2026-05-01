@@ -294,7 +294,7 @@
   position: absolute;
   width: 220px;
   min-height: 118px;
-  padding: 12px;
+  padding: 12px 12px 46px;
   border-radius: 18px;
   border: 1px solid rgba(148, 163, 184, 0.16);
   background: rgba(17, 24, 39, 0.94);
@@ -324,7 +324,6 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  cursor: grab;
 }
 
 .workflow-node-title {
@@ -348,7 +347,9 @@
   border-radius: 999px;
 }
 
-.port-row {
+.node-ports {
+  position: absolute;
+  inset: auto 12px 12px;
   display: flex;
   justify-content: space-between;
   gap: 12px;
@@ -372,6 +373,10 @@
 .port.in {
   border-color: rgba(34, 197, 94, 0.95);
   background: rgba(34, 197, 94, 0.95);
+}
+
+.workflow-node .port {
+  cursor: pointer;
 }
 
 .canvas-empty {

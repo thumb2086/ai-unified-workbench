@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
 import { useWorkbench } from '../hooks/useWorkbenchState'
 import { useI18n } from '../hooks/useI18n'
 import type { BlueprintNode, BlueprintNodeType, WorkflowBlueprint } from '../types/workbench'
@@ -6,6 +6,7 @@ import { executeWorkflow } from '../engine/workflow-engine'
 import { toWorkflowDefinition } from '../utils/workbench'
 
 const NODE_SIZE = { width: 220, height: 118 }
+const PORT_CENTER = 20
 const NODE_TEMPLATES: BlueprintNodeType[] = ['prompt', 'agent', 'tool', 'condition', 'merge']
 
 export function WorkflowBlueprintPage() {
@@ -19,11 +20,8 @@ export function WorkflowBlueprintPage() {
     updateWorkflow,
     deleteWorkflow,
   } = useWorkbench()
+
   const canvasRef = useRef<HTMLDivElement>(null)
-  const workflow = useMemo(
-    () => workflows.find(item => item.id === activeWorkflowId) ?? workflows[0] ?? null,
-    [workflows, activeWorkflowId],
-  )
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
   const [connectFrom, setConnectFrom] = useState<string | null>(null)
   const [draggingId, setDraggingId] = useState<string | null>(null)
@@ -32,7 +30,55 @@ export function WorkflowBlueprintPage() {
   const [runState, setRunState] = useState<'idle' | 'running' | 'success' | 'error'>('idle')
   const [runOutput, setRunOutput] = useState('')
 
+  const workflow = useMemo(
+    () => workflows.find(item => item.id === activeWorkflowId) ?? workflows[0] ?? null,
+    [workflows, activeWorkflowId],
+  )
+
   const currentNode = workflow?.nodes.find(node => node.id === selectedNodeId) ?? null
+
+  useEffect(() => {
+    if (!workflow) return
+    if (!selectedNodeId || !workflow.nodes.some(node => node.id === selectedNodeId)) {
+      setSelectedNodeId(workflow.nodes[0]?.id ?? null)
+    }
+  }, [workflow, selectedNodeId])
+
+  useEffect(() => {
+    if (!draggingId && !connectFrom) return
+
+    const handleWindowMove = (event: MouseEvent) => {
+      const rect = canvasRef.current?.getBoundingClientRect()
+      if (!rect) return
+
+      const x = event.clientX - rect.left
+      const y = event.clientY - rect.top
+      setMousePos({ x, y })
+
+      if (!draggingId || !workflow) return
+      const nextX = Math.max(20, x - dragOffset.x)
+      const nextY = Math.max(20, y - dragOffset.y)
+
+      updateCurrentWorkflow(current => ({
+        ...current,
+        nodes: current.nodes.map(node =>
+          node.id === draggingId
+            ? { ...node, position: { x: Math.round(nextX / 10) * 10, y: Math.round(nextY / 10) * 10 } }
+            : node,
+        ),
+        updatedAt: new Date().toISOString(),
+      }))
+    }
+
+    const handleWindowUp = () => setDraggingId(null)
+
+    window.addEventListener('mousemove', handleWindowMove)
+    window.addEventListener('mouseup', handleWindowUp)
+    return () => {
+      window.removeEventListener('mousemove', handleWindowMove)
+      window.removeEventListener('mouseup', handleWindowUp)
+    }
+  }, [connectFrom, dragOffset.x, dragOffset.y, draggingId, workflow])
 
   const updateCurrentWorkflow = (updater: (workflow: WorkflowBlueprint) => WorkflowBlueprint) => {
     if (!workflow) return
@@ -50,7 +96,7 @@ export function WorkflowBlueprintPage() {
     const node: BlueprintNode = {
       id: `${type}-${now}`,
       type,
-      title: getNodeTypeLabel(t, type),
+      title: getNodeTypeLabel(type),
       dependsOn: [],
       position,
       prompt: type === 'prompt' || type === 'agent' ? t('workflow.prompt') : undefined,
@@ -138,7 +184,7 @@ export function WorkflowBlueprintPage() {
   }
 
   const startDrag = (nodeId: string, event: ReactMouseEvent) => {
-    if (!workflow) return
+    if (!workflow || event.button !== 0 || isInteractiveTarget(event.target)) return
     const node = workflow.nodes.find(item => item.id === nodeId)
     if (!node) return
     setDraggingId(nodeId)
@@ -149,30 +195,14 @@ export function WorkflowBlueprintPage() {
     })
   }
 
-  const handleMove = (event: ReactMouseEvent) => {
+  const handleCanvasMouseMove = (event: ReactMouseEvent) => {
     const rect = canvasRef.current?.getBoundingClientRect()
-    if (rect) {
-      setMousePos({
-        x: event.clientX - rect.left,
-        y: event.clientY - rect.top,
-      })
-    }
-
-    if (!draggingId || !workflow || !rect) return
-    const x = Math.max(20, event.clientX - rect.left - dragOffset.x)
-    const y = Math.max(20, event.clientY - rect.top - dragOffset.y)
-    updateCurrentWorkflow(current => ({
-      ...current,
-      nodes: current.nodes.map(node =>
-        node.id === draggingId
-          ? { ...node, position: { x: Math.round(x / 10) * 10, y: Math.round(y / 10) * 10 } }
-          : node,
-      ),
-      updatedAt: new Date().toISOString(),
-    }))
+    if (!rect) return
+    setMousePos({
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top,
+    })
   }
-
-  const handleUp = () => setDraggingId(null)
 
   const handleConnectStart = (nodeId: string) => {
     setConnectFrom(nodeId)
@@ -196,6 +226,14 @@ export function WorkflowBlueprintPage() {
     setRunState(result.success ? 'success' : 'error')
     setRunOutput(JSON.stringify(result, null, 2))
   }
+
+  const connections = workflow?.nodes.flatMap(node =>
+    node.dependsOn.map(depId => ({ fromId: depId, toId: node.id })),
+  ) ?? []
+
+  const previewSource = connectFrom
+    ? workflow?.nodes.find(node => node.id === connectFrom) ?? null
+    : null
 
   return (
     <div className="page-grid workflow-page">
@@ -288,59 +326,77 @@ export function WorkflowBlueprintPage() {
         <div
           ref={canvasRef}
           className="workflow-canvas"
-          onMouseMove={handleMove}
-          onMouseUp={handleUp}
-          onMouseLeave={handleUp}
+          onMouseMove={handleCanvasMouseMove}
+          onMouseDown={event => {
+            if (event.target === event.currentTarget) {
+              setSelectedNodeId(null)
+            }
+          }}
         >
           <div className="grid-overlay" />
 
-          {workflow?.nodes.map(node => (
-            <svg key={`${workflow.id}-${node.id}`} className="connection-layer">
-              {node.dependsOn.map(depId => {
-                const dep = workflow.nodes.find(item => item.id === depId)
-                if (!dep) return null
-                return (
-                  <line
-                    key={`${depId}-${node.id}`}
-                    x1={dep.position.x + NODE_SIZE.width}
-                    y1={dep.position.y + NODE_SIZE.height / 2}
-                    x2={node.position.x}
-                    y2={node.position.y + NODE_SIZE.height / 2}
-                    className="connection-line"
-                  />
-                )
-              })}
-            </svg>
-          ))}
+          <svg className="connection-layer">
+            <defs>
+              <marker
+                id="workflow-arrow"
+                markerWidth="12"
+                markerHeight="12"
+                refX="10"
+                refY="6"
+                orient="auto"
+                markerUnits="strokeWidth"
+              >
+                <path d="M0,0 L12,6 L0,12 z" fill="rgba(96, 165, 250, 0.95)" />
+              </marker>
+              <marker
+                id="workflow-preview-arrow"
+                markerWidth="12"
+                markerHeight="12"
+                refX="10"
+                refY="6"
+                orient="auto"
+                markerUnits="strokeWidth"
+              >
+                <path d="M0,0 L12,6 L0,12 z" fill="rgba(34, 197, 94, 0.95)" />
+              </marker>
+            </defs>
 
-          {connectFrom && workflow && (() => {
-            const source = workflow.nodes.find(node => node.id === connectFrom)
-            if (!source) return null
-            return (
-              <svg className="connection-layer preview">
-                <line
-                  x1={source.position.x + NODE_SIZE.width}
-                  y1={source.position.y + NODE_SIZE.height / 2}
-                  x2={mousePos.x}
-                  y2={mousePos.y}
-                  className="connection-line drafting"
+            {connections.map(connection => {
+              const source = workflow?.nodes.find(node => node.id === connection.fromId)
+              const target = workflow?.nodes.find(node => node.id === connection.toId)
+              if (!source || !target) return null
+
+              const start = getPortPosition(source, 'out')
+              const end = getPortPosition(target, 'in')
+              return (
+                <path
+                  key={`${connection.fromId}-${connection.toId}`}
+                  d={buildConnectionPath(start, end)}
+                  className="connection-line"
+                  markerEnd="url(#workflow-arrow)"
                 />
-              </svg>
-            )
-          })()}
+              )
+            })}
+
+            {previewSource && (
+              <path
+                d={buildConnectionPath(getPortPosition(previewSource, 'out'), mousePos)}
+                className="connection-line drafting"
+                markerEnd="url(#workflow-preview-arrow)"
+              />
+            )}
+          </svg>
 
           {workflow?.nodes.map(node => (
             <div
               key={node.id}
               className={`workflow-node ${node.id === selectedNodeId ? 'selected' : ''} ${connectFrom === node.id ? 'connecting' : ''}`}
               style={{ left: node.position.x, top: node.position.y }}
+              onMouseDown={event => startDrag(node.id, event)}
               onClick={() => setSelectedNodeId(node.id)}
             >
-              <div
-                className="workflow-node-header drag-handle"
-                onMouseDown={event => startDrag(node.id, event)}
-              >
-                <span className="pill">{getNodeTypeLabel(t, node.type)}</span>
+              <div className="workflow-node-top">
+                <span className="pill">{getNodeTypeLabel(node.type)}</span>
                 {node.aiNodeId && <span className="pill subtle">{node.aiNodeId}</span>}
               </div>
 
@@ -351,7 +407,7 @@ export function WorkflowBlueprintPage() {
                 {node.type === 'condition' && <p>{node.condition?.expression}</p>}
               </div>
 
-              <div className="port-row">
+              <div className="node-ports">
                 <button
                   type="button"
                   className="port out"
@@ -603,7 +659,7 @@ export function WorkflowBlueprintPage() {
   )
 }
 
-function getNodeTypeLabel(_t: (key: string) => string, type: BlueprintNodeType): string {
+function getNodeTypeLabel(type: BlueprintNodeType): string {
   switch (type) {
     case 'prompt':
       return '提示詞'
@@ -635,4 +691,27 @@ function getAddLabel(t: (key: string) => string, type: BlueprintNodeType): strin
     default:
       return type
   }
+}
+
+function isInteractiveTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false
+  return Boolean(target.closest('button, input, textarea, select, label, option, a'))
+}
+
+function getPortPosition(node: BlueprintNode, side: 'in' | 'out') {
+  return {
+    x: side === 'in'
+      ? node.position.x + PORT_CENTER
+      : node.position.x + NODE_SIZE.width - PORT_CENTER,
+    y: node.position.y + NODE_SIZE.height - PORT_CENTER,
+  }
+}
+
+function buildConnectionPath(from: { x: number; y: number }, to: { x: number; y: number }) {
+  const dx = Math.max(120, Math.abs(to.x - from.x) * 0.5)
+  const c1x = from.x + dx
+  const c1y = from.y
+  const c2x = to.x - dx
+  const c2y = to.y
+  return `M ${from.x} ${from.y} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${to.x} ${to.y}`
 }

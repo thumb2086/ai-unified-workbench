@@ -10,14 +10,14 @@ const PROVIDER_OPTIONS = [
   { value: 'claude', label: 'Claude' },
   { value: 'grok', label: 'Grok' },
   { value: 'openai', label: 'OpenAI' },
-  { value: 'custom', label: 'Custom' },
+  { value: 'custom', label: '自訂' },
 ]
 
 const API_FORMAT_OPTIONS = [
   { value: 'openai', label: 'OpenAI' },
   { value: 'anthropic', label: 'Anthropic' },
   { value: 'nvidia-nim', label: 'NVIDIA NIM' },
-  { value: 'custom', label: 'Custom' },
+  { value: 'custom', label: '自訂' },
 ]
 
 export function AiNodesPage() {
@@ -127,7 +127,9 @@ export function AiNodesPage() {
             <div className="panel-head split">
               <div>
                 <h2>{activeNode.name}</h2>
-                <p className="muted">{t('common.type')}: {activeNode.kind.toUpperCase()} · {t('common.provider')}: {activeNode.provider}</p>
+                <p className="muted">
+                  {t('common.type')}: {activeNode.kind.toUpperCase()} · {t('common.provider')}: {activeNode.provider}
+                </p>
               </div>
               <div className="row">
                 <button onClick={() => duplicateAiNode(activeNode.id)}>{t('common.duplicate')}</button>

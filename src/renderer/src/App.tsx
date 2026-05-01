@@ -39,7 +39,7 @@ export default function App() {
           <div>
             <div className="eyebrow">{t('app.title')}</div>
             <h1>{t('app.title')}</h1>
-            <p className="subtitle">請在 Electron 中執行以使用完整功能。</p>
+            <p className="subtitle">請在 Electron 桌面應用中使用此介面。</p>
           </div>
         </header>
       </div>
