@@ -101,7 +101,6 @@ export function createDefaultAiNodes(): AiNode[] {
 
 export function createDefaultWorkflows(): WorkflowBlueprint[] {
   const now = new Date().toISOString()
-
   return [
     createSimplePromptChain(now),
     createBroadcastWorkflow(now),
@@ -111,11 +110,17 @@ export function createDefaultWorkflows(): WorkflowBlueprint[] {
   ]
 }
 
+export function mergeBuiltinWorkflows(workflows: WorkflowBlueprint[]): WorkflowBlueprint[] {
+  const builtin = createDefaultWorkflows()
+  const custom = workflows.filter(workflow => !BUILTIN_WORKFLOW_IDS.has(workflow.id))
+  return [...builtin, ...custom]
+}
+
 function createSimplePromptChain(now: string): WorkflowBlueprint {
   return {
     id: 'prompt-chain',
-    name: '簡單提示鏈',
-    description: '把一段提示詞整理後，再交給代理人摘要。',
+    name: '\u7c21\u55ae\u63d0\u793a\u93c8',
+    description: '\u5148\u7528 prompt \u6574\u7406\u5167\u5bb9\uff0c\u518d\u4ea4\u7d66 AI \u7bc0\u9ede\u8655\u7406\u3002',
     version: '1.0',
     entryPoint: 'prompt-1',
     updatedAt: now,
@@ -123,21 +128,21 @@ function createSimplePromptChain(now: string): WorkflowBlueprint {
       {
         id: 'prompt-1',
         type: 'prompt',
-        title: '提示詞',
-        prompt: '請先閱讀下列內容，並整理成簡短重點：{{input_text}}',
+        title: '\u63d0\u793a\u8a5e',
+        prompt: 'Write a short story about AI.',
         dependsOn: [],
-        outputVar: 'input_text',
-        position: { x: 80, y: 120 },
+        outputVar: 'story',
+        position: { x: 120, y: 180 },
       },
       {
         id: 'agent-1',
         type: 'agent',
-        title: '代理人',
+        title: '\u4ee3\u7406\u4eba',
         agent: { provider: 'chatgpt' },
-        prompt: '請根據整理後的內容產生摘要：{{input_text}}',
+        prompt: 'Summarize this story: {{story}}',
         dependsOn: ['prompt-1'],
         outputVar: 'summary',
-        position: { x: 360, y: 120 },
+        position: { x: 460, y: 180 },
       },
     ],
   }
@@ -146,8 +151,8 @@ function createSimplePromptChain(now: string): WorkflowBlueprint {
 function createBroadcastWorkflow(now: string): WorkflowBlueprint {
   return {
     id: 'broadcast-workflow',
-    name: '廣播工作流',
-    description: '同一個主題同時送給多個 AI，收集不同角度的回應。',
+    name: '\u5ee3\u64ad\u5de5\u4f5c\u6d41',
+    description: '\u540c\u4e00\u500b\u4e3b\u984c\u540c\u6642\u9001\u7d66\u591a\u500b AI \u7bc0\u9ede\u3002',
     version: '1.0',
     entryPoint: 'broadcast-topic',
     updatedAt: now,
@@ -155,50 +160,50 @@ function createBroadcastWorkflow(now: string): WorkflowBlueprint {
       {
         id: 'broadcast-topic',
         type: 'prompt',
-        title: '廣播主題',
-        prompt: '請針對這個主題產生可廣播給多個 AI 的說明：{{topic}}',
+        title: '\u5ee3\u64ad\u4e3b\u984c',
+        prompt: 'Analyze the topic from multiple perspectives: {{topic}}',
         dependsOn: [],
         outputVar: 'topic',
-        position: { x: 80, y: 140 },
+        position: { x: 120, y: 220 },
       },
       {
         id: 'broadcast-chatgpt',
         type: 'agent',
         title: 'ChatGPT',
         agent: { provider: 'chatgpt' },
-        prompt: '請提供第一個分析角度：{{topic}}',
+        prompt: 'Provide the first perspective for: {{topic}}',
         dependsOn: ['broadcast-topic'],
-        outputVar: 'chatgpt_reply',
-        position: { x: 380, y: 40 },
+        outputVar: 'chatgpt_result',
+        position: { x: 460, y: 80 },
       },
       {
         id: 'broadcast-gemini',
         type: 'agent',
         title: 'Gemini',
         agent: { provider: 'gemini' },
-        prompt: '請提供第二個分析角度：{{topic}}',
+        prompt: 'Provide the second perspective for: {{topic}}',
         dependsOn: ['broadcast-topic'],
-        outputVar: 'gemini_reply',
-        position: { x: 380, y: 180 },
+        outputVar: 'gemini_result',
+        position: { x: 460, y: 220 },
       },
       {
         id: 'broadcast-claude',
         type: 'agent',
         title: 'Claude',
         agent: { provider: 'claude' },
-        prompt: '請提供第三個分析角度：{{topic}}',
+        prompt: 'Provide the third perspective for: {{topic}}',
         dependsOn: ['broadcast-topic'],
-        outputVar: 'claude_reply',
-        position: { x: 380, y: 320 },
+        outputVar: 'claude_result',
+        position: { x: 460, y: 360 },
       },
       {
         id: 'broadcast-merge',
         type: 'merge',
-        title: '廣播彙整',
-        description: '把三個回應合併成最後摘要。',
+        title: '\u5f59\u6574',
+        description: '\u628a\u591a\u500b AI \u7684\u56de\u8986\u5408\u4f75\u3002',
         dependsOn: ['broadcast-chatgpt', 'broadcast-gemini', 'broadcast-claude'],
         outputVar: 'broadcast_summary',
-        position: { x: 700, y: 180 },
+        position: { x: 820, y: 220 },
       },
     ],
   }
@@ -207,8 +212,8 @@ function createBroadcastWorkflow(now: string): WorkflowBlueprint {
 function createRelayWorkflow(now: string): WorkflowBlueprint {
   return {
     id: 'relay-workflow',
-    name: '接力工作流',
-    description: '讓上一個節點的輸出成為下一個節點的輸入。',
+    name: '\u63a5\u529b\u5de5\u4f5c\u6d41',
+    description: '\u4e0a\u4e00\u500b\u7bc0\u9ede\u7684\u8f38\u51fa\uff0c\u6703\u6210\u70ba\u4e0b\u4e00\u500b\u7bc0\u9ede\u7684\u8f38\u5165\u3002',
     version: '1.0',
     entryPoint: 'relay-topic',
     updatedAt: now,
@@ -216,41 +221,41 @@ function createRelayWorkflow(now: string): WorkflowBlueprint {
       {
         id: 'relay-topic',
         type: 'prompt',
-        title: '起始題目',
-        prompt: '請先整理這個任務重點：{{seed}}',
+        title: '\u8d77\u59cb\u984c\u76ee',
+        prompt: 'Create the initial outline: {{seed}}',
         dependsOn: [],
         outputVar: 'seed',
-        position: { x: 80, y: 140 },
+        position: { x: 120, y: 220 },
       },
       {
         id: 'relay-1',
         type: 'agent',
-        title: '第一棒',
+        title: '\u7b2c\u4e00\u68d2',
         agent: { provider: 'chatgpt' },
-        prompt: '請先整理並延伸：{{seed}}',
+        prompt: 'Expand the initial outline: {{seed}}',
         dependsOn: ['relay-topic'],
-        outputVar: 'relay_step_1',
-        position: { x: 370, y: 60 },
+        outputVar: 'step_one',
+        position: { x: 420, y: 140 },
       },
       {
         id: 'relay-2',
         type: 'agent',
-        title: '第二棒',
+        title: '\u7b2c\u4e8c\u68d2',
         agent: { provider: 'gemini' },
-        prompt: '請承接前一段內容再補充：{{relay_step_1}}',
+        prompt: 'Refine the expanded outline: {{step_one}}',
         dependsOn: ['relay-1'],
-        outputVar: 'relay_step_2',
-        position: { x: 650, y: 140 },
+        outputVar: 'step_two',
+        position: { x: 740, y: 220 },
       },
       {
         id: 'relay-3',
         type: 'agent',
-        title: '第三棒',
+        title: '\u7b2c\u4e09\u68d2',
         agent: { provider: 'claude' },
-        prompt: '請把前面兩段整合成完整版本：{{relay_step_2}}',
+        prompt: 'Turn the refined outline into a final answer: {{step_two}}',
         dependsOn: ['relay-2'],
-        outputVar: 'relay_final',
-        position: { x: 930, y: 220 },
+        outputVar: 'relay_result',
+        position: { x: 1060, y: 300 },
       },
     ],
   }
@@ -259,8 +264,8 @@ function createRelayWorkflow(now: string): WorkflowBlueprint {
 function createDebateWorkflow(now: string): WorkflowBlueprint {
   return {
     id: 'debate-workflow',
-    name: '辯論工作流',
-    description: '讓多個 AI 分別提出正反意見，再把結果合併。',
+    name: '\u8faf\u8ad6\u5de5\u4f5c\u6d41',
+    description: '\u6b63\u53cd\u96d9\u65b9\u5404\u81ea\u56de\u61c9\uff0c\u6700\u5f8c\u518d\u5408\u4f75\u7d50\u679c\u3002',
     version: '1.0',
     entryPoint: 'debate-topic',
     updatedAt: now,
@@ -268,40 +273,40 @@ function createDebateWorkflow(now: string): WorkflowBlueprint {
       {
         id: 'debate-topic',
         type: 'prompt',
-        title: '辯論主題',
-        prompt: '請整理辯論主題與背景：{{topic}}',
+        title: '\u8faf\u8ad6\u4e3b\u984c',
+        prompt: 'Debate the topic: {{topic}}',
         dependsOn: [],
         outputVar: 'topic',
-        position: { x: 80, y: 140 },
+        position: { x: 120, y: 220 },
       },
       {
         id: 'debate-pro',
         type: 'agent',
-        title: '正方',
+        title: '\u6b63\u65b9',
         agent: { provider: 'chatgpt' },
-        prompt: '請從支持方角度提出論點：{{topic}}',
+        prompt: 'Argue for the topic: {{topic}}',
         dependsOn: ['debate-topic'],
         outputVar: 'pro_argument',
-        position: { x: 380, y: 40 },
+        position: { x: 460, y: 120 },
       },
       {
         id: 'debate-con',
         type: 'agent',
-        title: '反方',
+        title: '\u53cd\u65b9',
         agent: { provider: 'gemini' },
-        prompt: '請從反對方角度提出論點：{{topic}}',
+        prompt: 'Argue against the topic: {{topic}}',
         dependsOn: ['debate-topic'],
         outputVar: 'con_argument',
-        position: { x: 380, y: 200 },
+        position: { x: 460, y: 320 },
       },
       {
         id: 'debate-merge',
         type: 'merge',
-        title: '辯論彙整',
-        description: '整理正反方的重點差異。',
+        title: '\u8faf\u8ad6\u7d50\u8ad6',
+        description: '\u6574\u5408\u6b63\u53cd\u65b9\u7684\u91cd\u9ede\u8ad6\u9ede\u3002',
         dependsOn: ['debate-pro', 'debate-con'],
         outputVar: 'debate_summary',
-        position: { x: 700, y: 120 },
+        position: { x: 820, y: 220 },
       },
     ],
   }
@@ -310,8 +315,8 @@ function createDebateWorkflow(now: string): WorkflowBlueprint {
 function createSubagentWorkflow(now: string): WorkflowBlueprint {
   return {
     id: 'subagent-workflow',
-    name: '子代理工作流',
-    description: '主代理先規劃，再派子代理補充細節與執行結果。',
+    name: '\u5b50\u4ee3\u7406\u5de5\u4f5c\u6d41',
+    description: '\u4e3b\u4ee3\u7406\u5148\u898f\u5283\uff0c\u518d\u7531\u5b50\u4ee3\u7406\u88dc\u5145\u7d30\u7bc0\u3002',
     version: '1.0',
     entryPoint: 'subagent-brief',
     updatedAt: now,
@@ -319,40 +324,40 @@ function createSubagentWorkflow(now: string): WorkflowBlueprint {
       {
         id: 'subagent-brief',
         type: 'prompt',
-        title: '任務簡報',
-        prompt: '請先整理任務目標與限制：{{brief}}',
+        title: '\u4efb\u52d9\u7c21\u5831',
+        prompt: 'Prepare the task brief: {{brief}}',
         dependsOn: [],
         outputVar: 'brief',
-        position: { x: 80, y: 140 },
+        position: { x: 120, y: 220 },
       },
       {
         id: 'subagent-master',
         type: 'agent',
-        title: '主代理',
+        title: '\u4e3b\u4ee3\u7406',
         agent: { provider: 'chatgpt' },
-        prompt: '請先規劃工作步驟與分派方向：{{brief}}',
+        prompt: 'Plan the work and delegate subtasks: {{brief}}',
         dependsOn: ['subagent-brief'],
         outputVar: 'master_plan',
-        position: { x: 380, y: 40 },
+        position: { x: 460, y: 140 },
       },
       {
         id: 'subagent-worker',
         type: 'agent',
-        title: '子代理',
+        title: '\u5b50\u4ee3\u7406',
         agent: { provider: 'claude' },
-        prompt: '請根據主代理的規劃補充細節與可執行內容：{{master_plan}}',
+        prompt: 'Complete the detailed execution steps: {{master_plan}}',
         dependsOn: ['subagent-master'],
-        outputVar: 'subagent_detail',
-        position: { x: 660, y: 180 },
+        outputVar: 'worker_detail',
+        position: { x: 820, y: 280 },
       },
       {
         id: 'subagent-merge',
         type: 'merge',
-        title: '任務輸出',
-        description: '合併主代理與子代理的結果。',
+        title: '\u6700\u7d42\u8f38\u51fa',
+        description: '\u5408\u4f75\u4e3b\u4ee3\u7406\u8207\u5b50\u4ee3\u7406\u7684\u7d50\u679c\u3002',
         dependsOn: ['subagent-master', 'subagent-worker'],
-        outputVar: 'task_output',
-        position: { x: 960, y: 120 },
+        outputVar: 'subagent_result',
+        position: { x: 1120, y: 220 },
       },
     ],
   }
@@ -362,22 +367,21 @@ export function createEmptyWorkflow(): WorkflowBlueprint {
   const now = new Date().toISOString()
   return {
     id: `workflow-${Date.now()}`,
-    name: '新工作流',
+    name: '\u65b0\u5de5\u4f5c\u6d41',
     description: '',
     version: '1.0',
     entryPoint: '',
-    updatedAt: now,
     nodes: [],
+    updatedAt: now,
   }
 }
 
 export function createEmptyAiNode(kind: AiNodeKind = 'web'): AiNode {
   const now = new Date().toISOString()
   const id = `ai-${Date.now()}`
-
   return {
     id,
-    name: kind === 'web' ? '新的 Web 節點' : '新的 API 節點',
+    name: kind === 'web' ? '\u65b0\u7684 Web \u7bc0\u9ede' : '\u65b0\u7684 API \u7bc0\u9ede',
     kind,
     provider: kind === 'web' ? 'chatgpt' : 'openai',
     enabled: true,
@@ -391,3 +395,11 @@ export function createEmptyAiNode(kind: AiNodeKind = 'web'): AiNode {
     updatedAt: now,
   }
 }
+
+const BUILTIN_WORKFLOW_IDS = new Set([
+  'prompt-chain',
+  'broadcast-workflow',
+  'relay-workflow',
+  'debate-workflow',
+  'subagent-workflow',
+])

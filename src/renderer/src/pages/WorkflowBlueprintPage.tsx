@@ -1,13 +1,25 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
-import { useWorkbench } from '../hooks/useWorkbenchState'
-import { useI18n } from '../hooks/useI18n'
-import type { BlueprintNode, BlueprintNodeType, WorkflowBlueprint } from '../types/workbench'
 import { executeWorkflow } from '../engine/workflow-engine'
+import { useI18n } from '../hooks/useI18n'
+import { useWorkbench } from '../hooks/useWorkbenchState'
+import type { BlueprintNode, BlueprintNodeType, WorkflowBlueprint } from '../types/workbench'
 import { toWorkflowDefinition } from '../utils/workbench'
 
-const NODE_SIZE = { width: 220, height: 118 }
-const PORT_OFFSET = 20
+const NODE_WIDTH = 240
+const NODE_MIN_HEIGHT = 132
+const PORT_RADIUS = 11
+const DEFAULT_CANVAS_POINT = { x: 0, y: 0 }
 const NODE_TEMPLATES: BlueprintNodeType[] = ['prompt', 'agent', 'tool', 'condition', 'merge']
+
+type DragState = {
+  nodeId: string
+  offsetX: number
+  offsetY: number
+} | null
+
+type DraftConnection = {
+  fromId: string
+} | null
 
 export function WorkflowBlueprintPage() {
   const { t } = useI18n()
@@ -23,10 +35,9 @@ export function WorkflowBlueprintPage() {
 
   const canvasRef = useRef<HTMLDivElement>(null)
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
-  const [connectFrom, setConnectFrom] = useState<string | null>(null)
-  const [draggingId, setDraggingId] = useState<string | null>(null)
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
-  const [mousePos, setMousePos] = useState({ x: 0, y: 0 })
+  const [dragState, setDragState] = useState<DragState>(null)
+  const [draftConnection, setDraftConnection] = useState<DraftConnection>(null)
+  const [pointerOnCanvas, setPointerOnCanvas] = useState(DEFAULT_CANVAS_POINT)
   const [runState, setRunState] = useState<'idle' | 'running' | 'success' | 'error'>('idle')
   const [runOutput, setRunOutput] = useState('')
 
@@ -35,7 +46,7 @@ export function WorkflowBlueprintPage() {
     [workflows, activeWorkflowId],
   )
 
-  const currentNode = workflow?.nodes.find(node => node.id === selectedNodeId) ?? null
+  const selectedNode = workflow?.nodes.find(node => node.id === selectedNodeId) ?? null
 
   useEffect(() => {
     if (!workflow) return
@@ -45,45 +56,53 @@ export function WorkflowBlueprintPage() {
   }, [workflow, selectedNodeId])
 
   useEffect(() => {
-    if (!draggingId && !connectFrom) return
+    if (!workflow) return
+    const normalized = normalizeWorkflow(workflow)
+    if (normalized !== workflow) {
+      updateWorkflow(workflow.id, () => normalized)
+    }
+  }, [workflow, updateWorkflow])
 
-    const handleWindowMove = (event: PointerEvent) => {
-      const rect = canvasRef.current?.getBoundingClientRect()
-      if (!rect) return
+  useEffect(() => {
+    if (!dragState && !draftConnection) return
 
-      const x = event.clientX - rect.left
-      const y = event.clientY - rect.top
-      setMousePos({ x, y })
+    const handlePointerMove = (event: PointerEvent) => {
+      const point = getCanvasPoint(event.clientX, event.clientY, canvasRef.current)
+      if (!point) return
 
-      if (!draggingId || !workflow) return
-      const nextX = Math.max(0, x - dragOffset.x)
-      const nextY = Math.max(0, y - dragOffset.y)
+      setPointerOnCanvas(point)
+
+      if (!dragState || !workflow) return
+
+      const nextX = Math.max(24, point.x - dragState.offsetX)
+      const nextY = Math.max(24, point.y - dragState.offsetY)
 
       updateCurrentWorkflow(current => ({
         ...current,
         nodes: current.nodes.map(node =>
-          node.id === draggingId
-            ? { ...node, position: { x: Math.round(nextX), y: Math.round(nextY) } }
+          node.id === dragState.nodeId
+            ? { ...node, position: { x: snap(nextX), y: snap(nextY) } }
             : node,
         ),
         updatedAt: new Date().toISOString(),
       }))
     }
 
-    const handleWindowUp = () => {
-      setDraggingId(null)
-      setConnectFrom(null)
+    const handlePointerUp = () => {
+      setDragState(null)
+      setDraftConnection(null)
     }
 
-    window.addEventListener('pointermove', handleWindowMove)
-    window.addEventListener('pointerup', handleWindowUp)
+    window.addEventListener('pointermove', handlePointerMove)
+    window.addEventListener('pointerup', handlePointerUp)
+
     return () => {
-      window.removeEventListener('pointermove', handleWindowMove)
-      window.removeEventListener('pointerup', handleWindowUp)
+      window.removeEventListener('pointermove', handlePointerMove)
+      window.removeEventListener('pointerup', handlePointerUp)
     }
-  }, [connectFrom, dragOffset.x, dragOffset.y, draggingId, workflow])
+  }, [dragState, draftConnection, workflow])
 
-  const updateCurrentWorkflow = (updater: (workflow: WorkflowBlueprint) => WorkflowBlueprint) => {
+  const updateCurrentWorkflow = (updater: (current: WorkflowBlueprint) => WorkflowBlueprint) => {
     if (!workflow) return
     updateWorkflow(workflow.id, updater)
   }
@@ -92,8 +111,8 @@ export function WorkflowBlueprintPage() {
     if (!workflow) return
     const now = Date.now()
     const position = {
-      x: 80 + (workflow.nodes.length % 3) * 260,
-      y: 120 + Math.floor(workflow.nodes.length / 3) * 170,
+      x: 100 + (workflow.nodes.length % 3) * 320,
+      y: 120 + Math.floor(workflow.nodes.length / 3) * 180,
     }
 
     const node: BlueprintNode = {
@@ -120,32 +139,8 @@ export function WorkflowBlueprintPage() {
       nodes: [...current.nodes, node],
       updatedAt: new Date().toISOString(),
     }))
+
     setSelectedNodeId(node.id)
-  }
-
-  const autoLayout = () => {
-    if (!workflow) return
-    const grouped = new Map<number, BlueprintNode[]>()
-    workflow.nodes.forEach(node => {
-      const level = node.dependsOn.length
-      grouped.set(level, [...(grouped.get(level) ?? []), node])
-    })
-
-    updateCurrentWorkflow(current => ({
-      ...current,
-      nodes: current.nodes.map(node => {
-        const level = node.dependsOn.length
-        const index = (grouped.get(level) ?? []).findIndex(item => item.id === node.id)
-        return {
-          ...node,
-          position: {
-            x: 80 + level * 300,
-            y: 100 + Math.max(0, index) * 180,
-          },
-        }
-      }),
-      updatedAt: new Date().toISOString(),
-    }))
   }
 
   const updateNode = (nodeId: string, patch: Partial<BlueprintNode>) => {
@@ -158,9 +153,9 @@ export function WorkflowBlueprintPage() {
 
   const toggleDependency = (nodeId: string, dependencyId: string) => {
     if (!workflow) return
-    const target = workflow.nodes.find(node => node.id === nodeId)
     const source = workflow.nodes.find(node => node.id === dependencyId)
-    if (!target || !source || !canConnectNodes(source, target)) return
+    const target = workflow.nodes.find(node => node.id === nodeId)
+    if (!source || !target || !canConnectNodes(source, target)) return
 
     updateCurrentWorkflow(current => ({
       ...current,
@@ -181,63 +176,114 @@ export function WorkflowBlueprintPage() {
   const deleteNode = (nodeId: string) => {
     if (!workflow) return
     updateCurrentWorkflow(current => {
-      const nextNodes = current.nodes
+      const nodes = current.nodes
         .filter(node => node.id !== nodeId)
         .map(node => ({ ...node, dependsOn: node.dependsOn.filter(dep => dep !== nodeId) }))
 
       return {
         ...current,
-        entryPoint: current.entryPoint === nodeId ? nextNodes[0]?.id || '' : current.entryPoint,
-        nodes: nextNodes,
+        entryPoint: current.entryPoint === nodeId ? nodes[0]?.id ?? '' : current.entryPoint,
+        nodes,
         updatedAt: new Date().toISOString(),
       }
     })
 
-    if (selectedNodeId === nodeId) setSelectedNodeId(null)
+    if (selectedNodeId === nodeId) {
+      setSelectedNodeId(null)
+    }
   }
 
-  const startDrag = (nodeId: string, event: ReactPointerEvent) => {
+  const autoLayout = () => {
+    if (!workflow) return
+
+    const levelMap = new Map<string, number>()
+    const assignLevel = (node: BlueprintNode): number => {
+      if (levelMap.has(node.id)) return levelMap.get(node.id) || 0
+      if (!node.dependsOn.length) {
+        levelMap.set(node.id, 0)
+        return 0
+      }
+      const parentLevels = node.dependsOn
+        .map(depId => workflow.nodes.find(item => item.id === depId))
+        .filter(Boolean)
+        .map(dep => assignLevel(dep as BlueprintNode))
+      const level = Math.max(...parentLevels, 0) + 1
+      levelMap.set(node.id, level)
+      return level
+    }
+
+    workflow.nodes.forEach(assignLevel)
+
+    const rowsByLevel = new Map<number, BlueprintNode[]>()
+    workflow.nodes.forEach(node => {
+      const level = levelMap.get(node.id) ?? 0
+      rowsByLevel.set(level, [...(rowsByLevel.get(level) ?? []), node])
+    })
+
+    updateCurrentWorkflow(current => ({
+      ...current,
+      nodes: current.nodes.map(node => {
+        const level = levelMap.get(node.id) ?? 0
+        const index = (rowsByLevel.get(level) ?? []).findIndex(item => item.id === node.id)
+        return {
+          ...node,
+          position: {
+            x: 120 + level * 320,
+            y: 100 + Math.max(0, index) * 180,
+          },
+        }
+      }),
+      updatedAt: new Date().toISOString(),
+    }))
+  }
+
+  const startDrag = (nodeId: string, event: ReactPointerEvent<HTMLDivElement>) => {
     if (!workflow || event.button !== 0 || isInteractiveTarget(event.target)) return
     const node = workflow.nodes.find(item => item.id === nodeId)
-    if (!node) return
+    const point = getCanvasPoint(event.clientX, event.clientY, canvasRef.current)
+    if (!node || !point) return
 
     event.preventDefault()
-    try {
-      event.currentTarget.setPointerCapture(event.pointerId)
-    } catch {
-      // noop
-    }
-
-    setDraggingId(nodeId)
     setSelectedNodeId(nodeId)
-    setDragOffset({
-      x: event.clientX - node.position.x,
-      y: event.clientY - node.position.y,
+    setDragState({
+      nodeId,
+      offsetX: point.x - node.position.x,
+      offsetY: point.y - node.position.y,
     })
   }
 
-  const handleCanvasPointerMove = (event: ReactPointerEvent) => {
-    const rect = canvasRef.current?.getBoundingClientRect()
-    if (!rect) return
-    setMousePos({
-      x: event.clientX - rect.left,
-      y: event.clientY - rect.top,
-    })
-  }
-
-  const handleConnectStart = (nodeId: string) => {
-    setConnectFrom(nodeId)
+  const startConnection = (nodeId: string, event: ReactPointerEvent<HTMLButtonElement>) => {
+    const point = getCanvasPoint(event.clientX, event.clientY, canvasRef.current)
+    if (!point) return
+    event.preventDefault()
+    event.stopPropagation()
     setSelectedNodeId(nodeId)
+    setPointerOnCanvas(point)
+    setDraftConnection({ fromId: nodeId })
   }
 
-  const handleConnectFinish = (nodeId: string) => {
-    if (!workflow || !connectFrom || connectFrom === nodeId) return
-    const source = workflow.nodes.find(node => node.id === connectFrom)
+  const finishConnection = (nodeId: string, event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (!workflow || !draftConnection || draftConnection.fromId === nodeId) return
+    event.preventDefault()
+    event.stopPropagation()
+
+    const source = workflow.nodes.find(node => node.id === draftConnection.fromId)
     const target = workflow.nodes.find(node => node.id === nodeId)
-    if (source && target && canConnectNodes(source, target) && !target.dependsOn.includes(connectFrom)) {
-      toggleDependency(nodeId, connectFrom)
+    if (!source || !target || !canConnectNodes(source, target)) {
+      setDraftConnection(null)
+      return
     }
-    setConnectFrom(null)
+
+    if (!target.dependsOn.includes(source.id)) {
+      toggleDependency(target.id, source.id)
+    }
+    setDraftConnection(null)
+  }
+
+  const handleCanvasPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const point = getCanvasPoint(event.clientX, event.clientY, canvasRef.current)
+    if (!point) return
+    setPointerOnCanvas(point)
   }
 
   const handleRunWorkflow = async () => {
@@ -249,12 +295,19 @@ export function WorkflowBlueprintPage() {
     setRunOutput(JSON.stringify(result, null, 2))
   }
 
-  const connections = workflow?.nodes.flatMap(node =>
-    node.dependsOn.map(depId => ({ fromId: depId, toId: node.id })),
-  ) ?? []
+  const connections = (workflow?.nodes ?? []).flatMap(node =>
+    node.dependsOn
+      .map(depId => {
+        const source = workflow?.nodes.find(item => item.id === depId)
+        return source && canConnectNodes(source, node)
+          ? { from: source, to: node }
+          : null
+      })
+      .filter(Boolean) as Array<{ from: BlueprintNode; to: BlueprintNode }>,
+  )
 
-  const previewSource = connectFrom
-    ? workflow?.nodes.find(node => node.id === connectFrom) ?? null
+  const previewSource = draftConnection
+    ? workflow?.nodes.find(node => node.id === draftConnection.fromId) ?? null
     : null
 
   return (
@@ -349,7 +402,7 @@ export function WorkflowBlueprintPage() {
           ref={canvasRef}
           className="workflow-canvas"
           onPointerMove={handleCanvasPointerMove}
-          onMouseDown={event => {
+          onPointerDown={event => {
             if (event.target === event.currentTarget) {
               setSelectedNodeId(null)
             }
@@ -383,45 +436,59 @@ export function WorkflowBlueprintPage() {
               </marker>
             </defs>
 
-            {connections.map(connection => {
-              const source = workflow?.nodes.find(node => node.id === connection.fromId)
-              const target = workflow?.nodes.find(node => node.id === connection.toId)
-              if (!source || !target) return null
-
-              const start = getPortPosition(source, 'out')
-              const end = getPortPosition(target, 'in')
-              return (
-                <path
-                  key={`${connection.fromId}-${connection.toId}`}
-                  d={buildConnectionPath(start, end)}
-                  className="connection-line"
-                  markerEnd="url(#workflow-arrow)"
-                />
-              )
-            })}
+            {connections.map(connection => (
+              <path
+                key={`${connection.from.id}-${connection.to.id}`}
+                d={buildConnectionPath(getPortPosition(connection.from, 'out'), getPortPosition(connection.to, 'in'))}
+                className="connection-line"
+                markerEnd="url(#workflow-arrow)"
+              />
+            ))}
 
             {previewSource && (
               <path
-                d={buildConnectionPath(getPortPosition(previewSource, 'out'), mousePos)}
+                d={buildConnectionPath(getPortPosition(previewSource, 'out'), pointerOnCanvas)}
                 className="connection-line drafting"
                 markerEnd="url(#workflow-preview-arrow)"
               />
             )}
           </svg>
 
-          {workflow?.nodes.map(node => (
+          {(workflow?.nodes ?? []).map(node => (
             <div
               key={node.id}
-              className={`workflow-node ${node.id === selectedNodeId ? 'selected' : ''} ${connectFrom === node.id ? 'connecting' : ''}`}
+              className={[
+                'workflow-node',
+                node.id === selectedNodeId ? 'selected' : '',
+                dragState?.nodeId === node.id ? 'dragging' : '',
+              ].filter(Boolean).join(' ')}
               style={{ left: node.position.x, top: node.position.y }}
               onPointerDown={event => startDrag(node.id, event)}
               onClick={() => setSelectedNodeId(node.id)}
             >
+              {canAcceptIncoming(node.type) && (
+                <button
+                  type="button"
+                  className="port in"
+                  title={t('workflow.connectTo')}
+                  style={getPortStyle('in')}
+                  onPointerUp={event => finishConnection(node.id, event)}
+                />
+              )}
+
+              {canEmitOutgoing(node.type) && (
+                <button
+                  type="button"
+                  className="port out"
+                  title={t('workflow.connectFrom')}
+                  style={getPortStyle('out')}
+                  onPointerDown={event => startConnection(node.id, event)}
+                />
+              )}
+
               <div className="workflow-node-top">
                 <span className="pill">{getNodeTypeLabel(node.type)}</span>
-                {(node.agent?.provider || node.aiNodeId) && (
-                  <span className="pill subtle">{node.agent?.provider || node.aiNodeId}</span>
-                )}
+                {node.agent?.provider && <span className="pill subtle">{node.agent.provider}</span>}
               </div>
 
               <div className="workflow-node-title">{node.title}</div>
@@ -430,31 +497,6 @@ export function WorkflowBlueprintPage() {
                 {node.type === 'tool' && <p>{t('workflow.tool')}: {node.tool?.name}</p>}
                 {node.type === 'condition' && <p>{node.condition?.expression}</p>}
                 {node.type === 'prompt' && <p className="muted">{t('workflow.sourceOnly')}</p>}
-              </div>
-
-              <div className="node-ports">
-                {canEmitOutgoing(node.type) && (
-                  <button
-                    type="button"
-                    className="port out"
-                    title={t('workflow.connectFrom')}
-                    onClick={event => {
-                      event.stopPropagation()
-                      handleConnectStart(node.id)
-                    }}
-                  />
-                )}
-                {canAcceptIncoming(node.type) && (
-                  <button
-                    type="button"
-                    className="port in"
-                    title={t('workflow.connectTo')}
-                    onClick={event => {
-                      event.stopPropagation()
-                      handleConnectFinish(node.id)
-                    }}
-                  />
-                )}
               </div>
             </div>
           ))}
@@ -484,14 +526,14 @@ export function WorkflowBlueprintPage() {
             <h2>{t('workflow.inspector')}</h2>
             <p className="muted">{t('workflow.dragHint')}</p>
           </div>
-          {currentNode && (
-            <button className="danger" onClick={() => deleteNode(currentNode.id)}>
+          {selectedNode && (
+            <button className="danger" onClick={() => deleteNode(selectedNode.id)}>
               {t('common.delete')}
             </button>
           )}
         </div>
 
-        {!currentNode || !workflow ? (
+        {!selectedNode || !workflow ? (
           <div className="empty-state">
             <h3>{t('common.noSelection')}</h3>
             <p>{t('workflow.dragHint')}</p>
@@ -501,33 +543,33 @@ export function WorkflowBlueprintPage() {
             <label>
               <span>{t('workflow.titleLabel')}</span>
               <input
-                value={currentNode.title}
-                onChange={event => updateNode(currentNode.id, { title: event.target.value })}
+                value={selectedNode.title}
+                onChange={event => updateNode(selectedNode.id, { title: event.target.value })}
               />
             </label>
             <label>
               <span>{t('common.description')}</span>
               <textarea
-                value={currentNode.description || ''}
-                onChange={event => updateNode(currentNode.id, { description: event.target.value })}
+                value={selectedNode.description || ''}
+                onChange={event => updateNode(selectedNode.id, { description: event.target.value })}
               />
             </label>
             <label>
               <span>{t('workflow.outputVar')}</span>
               <input
-                value={currentNode.outputVar || ''}
-                onChange={event => updateNode(currentNode.id, { outputVar: event.target.value })}
+                value={selectedNode.outputVar || ''}
+                onChange={event => updateNode(selectedNode.id, { outputVar: event.target.value })}
                 placeholder="result"
               />
             </label>
 
-            {currentNode.type === 'agent' && (
+            {selectedNode.type === 'agent' && (
               <>
                 <label>
                   <span>{t('workflow.aiNode')}</span>
                   <select
-                    value={currentNode.aiNodeId || ''}
-                    onChange={event => updateNode(currentNode.id, { aiNodeId: event.target.value || undefined })}
+                    value={selectedNode.aiNodeId || ''}
+                    onChange={event => updateNode(selectedNode.id, { aiNodeId: event.target.value || undefined })}
                   >
                     <option value="">--</option>
                     {aiNodes.map(node => (
@@ -540,33 +582,33 @@ export function WorkflowBlueprintPage() {
                 <label>
                   <span>{t('workflow.prompt')}</span>
                   <textarea
-                    value={currentNode.prompt || ''}
-                    onChange={event => updateNode(currentNode.id, { prompt: event.target.value })}
+                    value={selectedNode.prompt || ''}
+                    onChange={event => updateNode(selectedNode.id, { prompt: event.target.value })}
                   />
                 </label>
               </>
             )}
 
-            {currentNode.type === 'prompt' && (
+            {selectedNode.type === 'prompt' && (
               <label>
                 <span>{t('workflow.prompt')}</span>
                 <textarea
-                  value={currentNode.prompt || ''}
-                  onChange={event => updateNode(currentNode.id, { prompt: event.target.value })}
+                  value={selectedNode.prompt || ''}
+                  onChange={event => updateNode(selectedNode.id, { prompt: event.target.value })}
                 />
               </label>
             )}
 
-            {currentNode.type === 'tool' && (
+            {selectedNode.type === 'tool' && (
               <>
                 <label>
                   <span>{t('workflow.tool')}</span>
                   <select
-                    value={currentNode.tool?.name ?? 'fsRead'}
-                    onChange={event => updateNode(currentNode.id, {
+                    value={selectedNode.tool?.name ?? 'fsRead'}
+                    onChange={event => updateNode(selectedNode.id, {
                       tool: {
                         name: event.target.value as NonNullable<BlueprintNode['tool']>['name'],
-                        params: currentNode.tool?.params ?? {},
+                        params: selectedNode.tool?.params ?? {},
                       },
                     })}
                   >
@@ -581,18 +623,18 @@ export function WorkflowBlueprintPage() {
                 <label>
                   <span>{t('workflow.toolParams')}</span>
                   <textarea
-                    value={JSON.stringify(currentNode.tool?.params ?? {}, null, 2)}
+                    value={JSON.stringify(selectedNode.tool?.params ?? {}, null, 2)}
                     onChange={event => {
                       try {
                         const params = JSON.parse(event.target.value) as Record<string, unknown>
-                        updateNode(currentNode.id, {
+                        updateNode(selectedNode.id, {
                           tool: {
-                            name: currentNode.tool?.name ?? 'fsRead',
+                            name: selectedNode.tool?.name ?? 'fsRead',
                             params,
                           },
                         })
                       } catch {
-                        // keep editing state even if JSON is temporarily invalid
+                        // Keep temporary invalid JSON while the user edits.
                       }
                     }}
                   />
@@ -600,17 +642,17 @@ export function WorkflowBlueprintPage() {
               </>
             )}
 
-            {currentNode.type === 'condition' && (
+            {selectedNode.type === 'condition' && (
               <>
                 <label>
                   <span>{t('workflow.expression')}</span>
                   <textarea
-                    value={currentNode.condition?.expression ?? ''}
-                    onChange={event => updateNode(currentNode.id, {
+                    value={selectedNode.condition?.expression ?? ''}
+                    onChange={event => updateNode(selectedNode.id, {
                       condition: {
                         expression: event.target.value,
-                        trueBranch: currentNode.condition?.trueBranch ?? '',
-                        falseBranch: currentNode.condition?.falseBranch ?? '',
+                        trueBranch: selectedNode.condition?.trueBranch ?? '',
+                        falseBranch: selectedNode.condition?.falseBranch ?? '',
                       },
                     })}
                   />
@@ -619,17 +661,17 @@ export function WorkflowBlueprintPage() {
                   <label>
                     <span>{t('workflow.trueBranch')}</span>
                     <select
-                      value={currentNode.condition?.trueBranch ?? ''}
-                      onChange={event => updateNode(currentNode.id, {
+                      value={selectedNode.condition?.trueBranch ?? ''}
+                      onChange={event => updateNode(selectedNode.id, {
                         condition: {
-                          expression: currentNode.condition?.expression ?? '',
+                          expression: selectedNode.condition?.expression ?? '',
                           trueBranch: event.target.value,
-                          falseBranch: currentNode.condition?.falseBranch ?? '',
+                          falseBranch: selectedNode.condition?.falseBranch ?? '',
                         },
                       })}
                     >
                       <option value="">--</option>
-                      {workflow.nodes.filter(node => node.id !== currentNode.id).map(node => (
+                      {workflow.nodes.filter(node => node.id !== selectedNode.id).map(node => (
                         <option key={node.id} value={node.id}>{node.title}</option>
                       ))}
                     </select>
@@ -637,17 +679,17 @@ export function WorkflowBlueprintPage() {
                   <label>
                     <span>{t('workflow.falseBranch')}</span>
                     <select
-                      value={currentNode.condition?.falseBranch ?? ''}
-                      onChange={event => updateNode(currentNode.id, {
+                      value={selectedNode.condition?.falseBranch ?? ''}
+                      onChange={event => updateNode(selectedNode.id, {
                         condition: {
-                          expression: currentNode.condition?.expression ?? '',
-                          trueBranch: currentNode.condition?.trueBranch ?? '',
+                          expression: selectedNode.condition?.expression ?? '',
+                          trueBranch: selectedNode.condition?.trueBranch ?? '',
                           falseBranch: event.target.value,
                         },
                       })}
                     >
                       <option value="">--</option>
-                      {workflow.nodes.filter(node => node.id !== currentNode.id).map(node => (
+                      {workflow.nodes.filter(node => node.id !== selectedNode.id).map(node => (
                         <option key={node.id} value={node.id}>{node.title}</option>
                       ))}
                     </select>
@@ -658,40 +700,28 @@ export function WorkflowBlueprintPage() {
 
             <div className="card stack">
               <div className="section-title">{t('common.dependencies')}</div>
-              {currentNode.type === 'prompt' ? (
+              {selectedNode.type === 'prompt' ? (
                 <div className="warning-box">
                   <strong>{t('workflow.sourceOnly')}</strong>
                   <p className="muted">{t('workflow.connectionLocked')}</p>
                 </div>
               ) : (
-                <>
-                  {workflow.nodes.filter(node => node.id !== currentNode.id).map(node => {
-                    const disabled = !canConnectNodes(node, currentNode)
+                workflow.nodes
+                  .filter(node => node.id !== selectedNode.id)
+                  .map(node => {
+                    const disabled = !canConnectNodes(node, selectedNode)
                     return (
                       <label key={node.id} className={`checkbox-row ${disabled ? 'disabled' : ''}`}>
                         <input
                           type="checkbox"
-                          checked={currentNode.dependsOn.includes(node.id)}
+                          checked={selectedNode.dependsOn.includes(node.id)}
                           disabled={disabled}
-                          onChange={() => toggleDependency(currentNode.id, node.id)}
+                          onChange={() => toggleDependency(selectedNode.id, node.id)}
                         />
                         <span>{node.title}</span>
                       </label>
                     )
-                  })}
-                  <button
-                    onClick={() => {
-                      if (connectFrom && connectFrom !== currentNode.id) {
-                        toggleDependency(currentNode.id, connectFrom)
-                        setConnectFrom(null)
-                      } else {
-                        setConnectFrom(currentNode.id)
-                      }
-                    }}
-                  >
-                    {connectFrom === currentNode.id ? t('common.cancel') : t('workflow.linkFrom')}
-                  </button>
-                </>
+                  })
               )}
             </div>
           </div>
@@ -701,24 +731,68 @@ export function WorkflowBlueprintPage() {
   )
 }
 
+function normalizeWorkflow(workflow: WorkflowBlueprint): WorkflowBlueprint {
+  let changed = false
+  const nodes = workflow.nodes.map(node => {
+    const validDeps = node.dependsOn.filter(depId => {
+      const source = workflow.nodes.find(item => item.id === depId)
+      return Boolean(source && canConnectNodes(source, node))
+    })
+
+    if (validDeps.length !== node.dependsOn.length) {
+      changed = true
+      return { ...node, dependsOn: validDeps }
+    }
+
+    return node
+  })
+
+  const entryPoint = nodes.some(node => node.id === workflow.entryPoint) ? workflow.entryPoint : nodes[0]?.id ?? ''
+  if (entryPoint !== workflow.entryPoint) {
+    changed = true
+  }
+
+  return changed
+    ? {
+        ...workflow,
+        entryPoint,
+        nodes,
+        updatedAt: new Date().toISOString(),
+      }
+    : workflow
+}
+
+function getCanvasPoint(clientX: number, clientY: number, canvas: HTMLDivElement | null) {
+  if (!canvas) return null
+  const rect = canvas.getBoundingClientRect()
+  return {
+    x: clientX - rect.left,
+    y: clientY - rect.top,
+  }
+}
+
+function snap(value: number) {
+  return Math.round(value / 4) * 4
+}
+
 function getNodeTypeLabel(type: BlueprintNodeType): string {
   switch (type) {
     case 'prompt':
-      return '提示詞'
+      return '\u63d0\u793a\u8a5e'
     case 'agent':
-      return '代理人'
+      return '\u4ee3\u7406\u4eba'
     case 'tool':
-      return '工具'
+      return '\u5de5\u5177'
     case 'condition':
-      return '條件'
+      return '\u689d\u4ef6'
     case 'merge':
-      return '合併'
+      return '\u5408\u4f75'
     default:
       return type
   }
 }
 
-function getAddLabel(t: (key: string) => string, type: BlueprintNodeType): string {
+function getAddLabel(t: (key: string) => string, type: BlueprintNodeType) {
   switch (type) {
     case 'prompt':
       return t('workflow.addPrompt')
@@ -735,40 +809,42 @@ function getAddLabel(t: (key: string) => string, type: BlueprintNodeType): strin
   }
 }
 
-function isInteractiveTarget(target: EventTarget | null): boolean {
+function isInteractiveTarget(target: EventTarget | null) {
   if (!(target instanceof HTMLElement)) return false
   return Boolean(target.closest('button, input, textarea, select, label, option, a'))
 }
 
-function canAcceptIncoming(type: BlueprintNodeType): boolean {
+function canAcceptIncoming(type: BlueprintNodeType) {
   return type !== 'prompt'
 }
 
-function canEmitOutgoing(type: BlueprintNodeType): boolean {
+function canEmitOutgoing(_type: BlueprintNodeType) {
   return true
 }
 
-function canConnectNodes(source: BlueprintNode, target: BlueprintNode): boolean {
+function canConnectNodes(source: BlueprintNode, target: BlueprintNode) {
   if (source.id === target.id) return false
   if (!canEmitOutgoing(source.type)) return false
   if (!canAcceptIncoming(target.type)) return false
   return true
 }
 
+function getPortStyle(side: 'in' | 'out') {
+  return side === 'in'
+    ? { left: -PORT_RADIUS, top: NODE_MIN_HEIGHT / 2 - PORT_RADIUS }
+    : { right: -PORT_RADIUS, top: NODE_MIN_HEIGHT / 2 - PORT_RADIUS }
+}
+
 function getPortPosition(node: BlueprintNode, side: 'in' | 'out') {
   return {
-    x: side === 'in'
-      ? node.position.x + PORT_OFFSET
-      : node.position.x + NODE_SIZE.width - PORT_OFFSET,
-    y: node.position.y + NODE_SIZE.height / 2,
+    x: side === 'in' ? node.position.x : node.position.x + NODE_WIDTH,
+    y: node.position.y + NODE_MIN_HEIGHT / 2,
   }
 }
 
 function buildConnectionPath(from: { x: number; y: number }, to: { x: number; y: number }) {
-  const dx = Math.max(120, Math.abs(to.x - from.x) * 0.5)
-  const c1x = from.x + dx
-  const c1y = from.y
-  const c2x = to.x - dx
-  const c2y = to.y
-  return `M ${from.x} ${from.y} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${to.x} ${to.y}`
+  const distance = Math.max(120, Math.abs(to.x - from.x) * 0.45)
+  const c1x = from.x + distance
+  const c2x = to.x - distance
+  return `M ${from.x} ${from.y} C ${c1x} ${from.y}, ${c2x} ${to.y}, ${to.x} ${to.y}`
 }

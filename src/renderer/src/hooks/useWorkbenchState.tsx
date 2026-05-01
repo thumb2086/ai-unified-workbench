@@ -10,6 +10,7 @@ import {
   createDefaultWorkflows,
   createEmptyAiNode,
   createEmptyWorkflow,
+  mergeBuiltinWorkflows,
 } from '../types/workbench'
 
 interface WorkbenchContextValue extends WorkbenchState {
@@ -35,10 +36,11 @@ const WorkbenchContext = createContext<WorkbenchContextValue | null>(null)
 
 export function WorkbenchProvider({ children }: { children: ReactNode }) {
   const [aiNodes, setAiNodes] = useStorage<AiNode[]>('ai-workbench.ai-nodes.v2', createDefaultAiNodes())
-  const [workflows, setWorkflows] = useStorage<WorkflowBlueprint[]>('ai-workbench.workflows.v2', createDefaultWorkflows())
+  const [storedWorkflows, setWorkflows] = useStorage<WorkflowBlueprint[]>('ai-workbench.workflows.v3', createDefaultWorkflows())
   const [chatThreads, setChatThreads] = useStorage<ChatThread[]>('ai-workbench.chat-threads.v2', [])
   const [language, setLanguage] = useStorage<Language>('ai-workbench.language.v2', 'zh')
-  const [activeWorkflowId, setActiveWorkflowId] = useStorage<string | null>('ai-workbench.active-workflow.v2', workflows[0]?.id ?? null)
+  const workflows = useMemo(() => mergeBuiltinWorkflows(storedWorkflows), [storedWorkflows])
+  const [activeWorkflowId, setActiveWorkflowId] = useStorage<string | null>('ai-workbench.active-workflow.v3', workflows[0]?.id ?? null)
   const [activeChatThreadId, setActiveChatThreadId] = useStorage<string | null>('ai-workbench.active-chat-thread.v2', null)
   const [activeAiNodeId, setActiveAiNodeId] = useStorage<string | null>('ai-workbench.active-ai-node.v2', aiNodes[0]?.id ?? null)
 

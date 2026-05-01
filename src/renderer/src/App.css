@@ -292,8 +292,8 @@
 
 .workflow-node {
   position: absolute;
-  width: 220px;
-  min-height: 118px;
+  width: 240px;
+  min-height: 132px;
   padding: 12px 12px 46px;
   border-radius: 18px;
   border: 1px solid rgba(148, 163, 184, 0.16);
@@ -309,6 +309,11 @@
 
 .workflow-node:active {
   cursor: grabbing;
+}
+
+.workflow-node.dragging {
+  z-index: 5;
+  box-shadow: 0 20px 44px rgba(0, 0, 0, 0.4);
 }
 
 .workflow-node.selected {
@@ -352,16 +357,8 @@
   border-radius: 999px;
 }
 
-.node-ports {
-  position: absolute;
-  inset: 50% 12px auto;
-  transform: translateY(-50%);
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-}
-
 .port {
+  position: absolute;
   width: 20px;
   height: 20px;
   padding: 0;
