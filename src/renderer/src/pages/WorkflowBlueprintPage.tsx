@@ -36,6 +36,7 @@ export function WorkflowBlueprintPage() {
   const canvasRef = useRef<HTMLDivElement>(null)
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
   const [dragState, setDragState] = useState<DragState>(null)
+  const [dragPositions, setDragPositions] = useState<Record<string, { x: number; y: number }>>({})
   const [draftConnection, setDraftConnection] = useState<DraftConnection>(null)
   const [pointerOnCanvas, setPointerOnCanvas] = useState(DEFAULT_CANVAS_POINT)
   const [runState, setRunState] = useState<'idle' | 'running' | 'success' | 'error'>('idle')
@@ -77,19 +78,27 @@ export function WorkflowBlueprintPage() {
       const nextX = Math.max(24, point.x - dragState.offsetX)
       const nextY = Math.max(24, point.y - dragState.offsetY)
 
-      updateCurrentWorkflow(current => ({
+      setDragPositions(current => ({
         ...current,
-        nodes: current.nodes.map(node =>
-          node.id === dragState.nodeId
-            ? { ...node, position: { x: snap(nextX), y: snap(nextY) } }
-            : node,
-        ),
-        updatedAt: new Date().toISOString(),
+        [dragState.nodeId]: { x: nextX, y: nextY },
       }))
     }
 
     const handlePointerUp = () => {
+      if (dragState && dragPositions[dragState.nodeId]) {
+        const nextPosition = dragPositions[dragState.nodeId]
+        updateCurrentWorkflow(current => ({
+          ...current,
+          nodes: current.nodes.map(node =>
+            node.id === dragState.nodeId
+              ? { ...node, position: nextPosition }
+              : node,
+          ),
+          updatedAt: new Date().toISOString(),
+        }))
+      }
       setDragState(null)
+      setDragPositions({})
       setDraftConnection(null)
     }
 
@@ -100,7 +109,7 @@ export function WorkflowBlueprintPage() {
       window.removeEventListener('pointermove', handlePointerMove)
       window.removeEventListener('pointerup', handlePointerUp)
     }
-  }, [dragState, draftConnection, workflow])
+  }, [dragPositions, dragState, draftConnection, workflow])
 
   const updateCurrentWorkflow = (updater: (current: WorkflowBlueprint) => WorkflowBlueprint) => {
     if (!workflow) return
@@ -439,7 +448,10 @@ export function WorkflowBlueprintPage() {
             {connections.map(connection => (
               <path
                 key={`${connection.from.id}-${connection.to.id}`}
-                d={buildConnectionPath(getPortPosition(connection.from, 'out'), getPortPosition(connection.to, 'in'))}
+                d={buildConnectionPath(
+                  getPortPosition(connection.from, 'out', dragPositions[connection.from.id]),
+                  getPortPosition(connection.to, 'in', dragPositions[connection.to.id]),
+                )}
                 className="connection-line"
                 markerEnd="url(#workflow-arrow)"
               />
@@ -447,7 +459,7 @@ export function WorkflowBlueprintPage() {
 
             {previewSource && (
               <path
-                d={buildConnectionPath(getPortPosition(previewSource, 'out'), pointerOnCanvas)}
+                d={buildConnectionPath(getPortPosition(previewSource, 'out', dragPositions[previewSource.id]), pointerOnCanvas)}
                 className="connection-line drafting"
                 markerEnd="url(#workflow-preview-arrow)"
               />
@@ -462,7 +474,10 @@ export function WorkflowBlueprintPage() {
                 node.id === selectedNodeId ? 'selected' : '',
                 dragState?.nodeId === node.id ? 'dragging' : '',
               ].filter(Boolean).join(' ')}
-              style={{ left: node.position.x, top: node.position.y }}
+              style={{
+                left: dragPositions[node.id]?.x ?? node.position.x,
+                top: dragPositions[node.id]?.y ?? node.position.y,
+              }}
               onPointerDown={event => startDrag(node.id, event)}
               onClick={() => setSelectedNodeId(node.id)}
             >
@@ -771,10 +786,6 @@ function getCanvasPoint(clientX: number, clientY: number, canvas: HTMLDivElement
   }
 }
 
-function snap(value: number) {
-  return Math.round(value / 4) * 4
-}
-
 function getNodeTypeLabel(type: BlueprintNodeType): string {
   switch (type) {
     case 'prompt':
@@ -835,10 +846,15 @@ function getPortStyle(side: 'in' | 'out') {
     : { right: -PORT_RADIUS, top: NODE_MIN_HEIGHT / 2 - PORT_RADIUS }
 }
 
-function getPortPosition(node: BlueprintNode, side: 'in' | 'out') {
+function getPortPosition(
+  node: BlueprintNode,
+  side: 'in' | 'out',
+  overridePosition?: { x: number; y: number },
+) {
+  const position = overridePosition ?? node.position
   return {
-    x: side === 'in' ? node.position.x : node.position.x + NODE_WIDTH,
-    y: node.position.y + NODE_MIN_HEIGHT / 2,
+    x: side === 'in' ? position.x : position.x + NODE_WIDTH,
+    y: position.y + NODE_MIN_HEIGHT / 2,
   }
 }
 
