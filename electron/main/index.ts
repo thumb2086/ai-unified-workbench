@@ -32,7 +32,7 @@ function createWindow() {
 
   // Handle webview attachment
   win.webContents.on('did-attach-webview', (_: any, wc: any) => {
-    wc.setWindowOpenHandler(({ url }: { url: string }) => ({ action: 'allow', overrideBrowserWindowOptions: { show: false } }))
+    wc.setWindowOpenHandler(() => ({ action: 'allow' }))
   })
 
   if (isDev) {

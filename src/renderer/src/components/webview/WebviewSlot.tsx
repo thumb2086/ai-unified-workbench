@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { BrowserSessionRecord, BrowserSessionStatus } from '../../services/browser-session-store'
 import './WebviewSlot.css'
 
@@ -30,12 +30,14 @@ export function WebviewSlot({
   onStatusChange,
 }: WebviewSlotProps) {
   const webviewRef = useRef<WebviewElement | null>(null)
-  const [partition, setPartition] = useState('')
+  const partition = useMemo(() => `persist:webview-${slot.sessionId}`, [slot.sessionId])
   const [error, setError] = useState<string | null>(slot.lastError || null)
+  const [isAttached, setIsAttached] = useState(false)
 
   useEffect(() => {
     let cancelled = false
     setError(null)
+    setIsAttached(false)
     onStatusChange?.(slot, { status: 'loading', lastError: undefined })
 
     window.aiWorkbench.createWebview({
@@ -50,7 +52,11 @@ export function WebviewSlot({
         onStatusChange?.(slot, { status: 'error', lastError: message })
         return
       }
-      setPartition(result.partition)
+      if (result.partition !== partition) {
+        const message = `Session partition 不一致：${result.partition}`
+        setError(message)
+        onStatusChange?.(slot, { status: 'error', lastError: message })
+      }
     }).catch((err: Error) => {
       if (cancelled) return
       const message = err.message || '無法建立內嵌網頁'
@@ -61,7 +67,7 @@ export function WebviewSlot({
     return () => {
       cancelled = true
     }
-  }, [slot.sessionId])
+  }, [partition, slot.sessionId, slot.providerName, slot.url])
 
   useEffect(() => {
     const webview = webviewRef.current
@@ -73,6 +79,7 @@ export function WebviewSlot({
         const webContentsId = webview.getWebContentsId?.()
         if (webContentsId) {
           attached = true
+          setIsAttached(true)
           void window.aiWorkbench.registerWebview(slot.sessionId, webContentsId)
           return true
         }
@@ -90,10 +97,14 @@ export function WebviewSlot({
     }, ATTACH_TIMEOUT_MS)
 
     const handleDidAttach = () => {
+      attached = true
+      setIsAttached(true)
       register()
       onStatusChange?.(slot, { status: 'loading', lastError: undefined })
     }
     const handleDomReady = () => {
+      attached = true
+      setIsAttached(true)
       register()
       onStatusChange?.(slot, { status: 'ready', lastError: undefined })
     }
@@ -120,7 +131,7 @@ export function WebviewSlot({
       webview.removeEventListener('did-stop-loading', handleDidStopLoading)
       webview.removeEventListener('did-fail-load', handleDidFailLoad)
     }
-  }, [onStatusChange, partition, slot])
+  }, [partition, slot.sessionId])
 
   const status = (error ? 'error' : slot.status) as BrowserSessionStatus
 
@@ -148,16 +159,16 @@ export function WebviewSlot({
       )}
 
       <div className="embedded-webview-frame">
-        {partition ? (
-          <webview
-            ref={webviewRef as never}
-            className="embedded-webview"
-            src={slot.url}
-            partition={partition}
-            allowpopups
-          />
-        ) : (
-          <div className="embedded-webview-loading">正在建立內嵌網頁...</div>
+        <webview
+          key={slot.sessionId}
+          ref={webviewRef as never}
+          className="embedded-webview"
+          src={slot.url}
+          partition={partition}
+          allowpopups
+        />
+        {!error && status === 'loading' && !isAttached && (
+          <div className="embedded-webview-loading">正在啟用內嵌網頁...</div>
         )}
       </div>
     </div>
