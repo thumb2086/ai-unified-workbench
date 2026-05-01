@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+  type WheelEvent as ReactWheelEvent,
+} from 'react'
 import { executeWorkflow } from '../engine/workflow-engine'
 import { useI18n } from '../hooks/useI18n'
 import { useWorkbench } from '../hooks/useWorkbenchState'
@@ -10,6 +17,9 @@ const NODE_MIN_HEIGHT = 132
 const PORT_RADIUS = 11
 const DEFAULT_CANVAS_POINT = { x: 0, y: 0 }
 const NODE_TEMPLATES: BlueprintNodeType[] = ['prompt', 'agent', 'tool', 'condition', 'merge']
+const MIN_ZOOM = 0.6
+const MAX_ZOOM = 1.8
+const ZOOM_STEP = 0.1
 
 type DragState = {
   nodeId: string
@@ -41,6 +51,7 @@ export function WorkflowBlueprintPage() {
   const [pointerOnCanvas, setPointerOnCanvas] = useState(DEFAULT_CANVAS_POINT)
   const [runState, setRunState] = useState<'idle' | 'running' | 'success' | 'error'>('idle')
   const [runOutput, setRunOutput] = useState('')
+  const [zoom, setZoom] = useState(1)
 
   const workflow = useMemo(
     () => workflows.find(item => item.id === activeWorkflowId) ?? workflows[0] ?? null,
@@ -68,7 +79,7 @@ export function WorkflowBlueprintPage() {
     if (!dragState && !draftConnection) return
 
     const handlePointerMove = (event: PointerEvent) => {
-      const point = getCanvasPoint(event.clientX, event.clientY, canvasRef.current)
+      const point = getCanvasPoint(event.clientX, event.clientY, canvasRef.current, zoom)
       if (!point) return
 
       setPointerOnCanvas(point)
@@ -109,7 +120,7 @@ export function WorkflowBlueprintPage() {
       window.removeEventListener('pointermove', handlePointerMove)
       window.removeEventListener('pointerup', handlePointerUp)
     }
-  }, [dragPositions, dragState, draftConnection, workflow])
+  }, [dragPositions, dragState, draftConnection, workflow, zoom])
 
   const updateCurrentWorkflow = (updater: (current: WorkflowBlueprint) => WorkflowBlueprint) => {
     if (!workflow) return
@@ -249,7 +260,7 @@ export function WorkflowBlueprintPage() {
   const startDrag = (nodeId: string, event: ReactPointerEvent<HTMLDivElement>) => {
     if (!workflow || event.button !== 0 || isInteractiveTarget(event.target)) return
     const node = workflow.nodes.find(item => item.id === nodeId)
-    const point = getCanvasPoint(event.clientX, event.clientY, canvasRef.current)
+    const point = getCanvasPoint(event.clientX, event.clientY, canvasRef.current, zoom)
     if (!node || !point) return
 
     event.preventDefault()
@@ -262,7 +273,7 @@ export function WorkflowBlueprintPage() {
   }
 
   const startConnection = (nodeId: string, event: ReactPointerEvent<HTMLButtonElement>) => {
-    const point = getCanvasPoint(event.clientX, event.clientY, canvasRef.current)
+    const point = getCanvasPoint(event.clientX, event.clientY, canvasRef.current, zoom)
     if (!point) return
     event.preventDefault()
     event.stopPropagation()
@@ -290,9 +301,19 @@ export function WorkflowBlueprintPage() {
   }
 
   const handleCanvasPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
-    const point = getCanvasPoint(event.clientX, event.clientY, canvasRef.current)
+    const point = getCanvasPoint(event.clientX, event.clientY, canvasRef.current, zoom)
     if (!point) return
     setPointerOnCanvas(point)
+  }
+
+  const handleZoom = (direction: 'in' | 'out') => {
+    setZoom(current => clampZoom(current + (direction === 'in' ? ZOOM_STEP : -ZOOM_STEP)))
+  }
+
+  const handleWheel = (event: ReactWheelEvent<HTMLDivElement>) => {
+    if (!event.ctrlKey && !event.metaKey) return
+    event.preventDefault()
+    setZoom(current => clampZoom(current + (event.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP)))
   }
 
   const handleRunWorkflow = async () => {
@@ -372,6 +393,11 @@ export function WorkflowBlueprintPage() {
             <p className="muted">{t('workflow.connectHint')}</p>
           </div>
           <div className="row">
+            <div className="zoom-controls">
+              <button onClick={() => handleZoom('out')}>-</button>
+              <span className="pill subtle">{Math.round(zoom * 100)}%</span>
+              <button onClick={() => handleZoom('in')}>+</button>
+            </div>
             {NODE_TEMPLATES.map(type => (
               <button key={type} onClick={() => addNode(type)}>
                 {getAddLabel(t, type)}
@@ -411,117 +437,123 @@ export function WorkflowBlueprintPage() {
           ref={canvasRef}
           className="workflow-canvas"
           onPointerMove={handleCanvasPointerMove}
+          onWheel={handleWheel}
           onPointerDown={event => {
             if (event.target === event.currentTarget) {
               setSelectedNodeId(null)
             }
           }}
         >
-          <div className="grid-overlay" />
+          <div
+            className="canvas-viewport"
+            style={{ transform: `scale(${zoom})`, transformOrigin: 'top left' }}
+          >
+            <div className="grid-overlay" />
 
-          <svg className="connection-layer">
-            <defs>
-              <marker
-                id="workflow-arrow"
-                markerWidth="12"
-                markerHeight="12"
-                refX="10"
-                refY="6"
-                orient="auto"
-                markerUnits="strokeWidth"
-              >
-                <path d="M0,0 L12,6 L0,12 z" fill="rgba(96, 165, 250, 0.95)" />
-              </marker>
-              <marker
-                id="workflow-preview-arrow"
-                markerWidth="12"
-                markerHeight="12"
-                refX="10"
-                refY="6"
-                orient="auto"
-                markerUnits="strokeWidth"
-              >
-                <path d="M0,0 L12,6 L0,12 z" fill="rgba(34, 197, 94, 0.95)" />
-              </marker>
-            </defs>
+            <svg className="connection-layer">
+              <defs>
+                <marker
+                  id="workflow-arrow"
+                  markerWidth="12"
+                  markerHeight="12"
+                  refX="10"
+                  refY="6"
+                  orient="auto"
+                  markerUnits="strokeWidth"
+                >
+                  <path d="M0,0 L12,6 L0,12 z" fill="rgba(96, 165, 250, 0.95)" />
+                </marker>
+                <marker
+                  id="workflow-preview-arrow"
+                  markerWidth="12"
+                  markerHeight="12"
+                  refX="10"
+                  refY="6"
+                  orient="auto"
+                  markerUnits="strokeWidth"
+                >
+                  <path d="M0,0 L12,6 L0,12 z" fill="rgba(34, 197, 94, 0.95)" />
+                </marker>
+              </defs>
 
-            {connections.map(connection => (
-              <path
-                key={`${connection.from.id}-${connection.to.id}`}
-                d={buildConnectionPath(
-                  getPortPosition(connection.from, 'out', dragPositions[connection.from.id]),
-                  getPortPosition(connection.to, 'in', dragPositions[connection.to.id]),
+              {connections.map(connection => (
+                <path
+                  key={`${connection.from.id}-${connection.to.id}`}
+                  d={buildConnectionPath(
+                    getPortPosition(connection.from, 'out', dragPositions[connection.from.id]),
+                    getPortPosition(connection.to, 'in', dragPositions[connection.to.id]),
+                  )}
+                  className="connection-line"
+                  markerEnd="url(#workflow-arrow)"
+                />
+              ))}
+
+              {previewSource && (
+                <path
+                  d={buildConnectionPath(getPortPosition(previewSource, 'out', dragPositions[previewSource.id]), pointerOnCanvas)}
+                  className="connection-line drafting"
+                  markerEnd="url(#workflow-preview-arrow)"
+                />
+              )}
+            </svg>
+
+            {(workflow?.nodes ?? []).map(node => (
+              <div
+                key={node.id}
+                className={[
+                  'workflow-node',
+                  node.id === selectedNodeId ? 'selected' : '',
+                  dragState?.nodeId === node.id ? 'dragging' : '',
+                ].filter(Boolean).join(' ')}
+                style={{
+                  left: dragPositions[node.id]?.x ?? node.position.x,
+                  top: dragPositions[node.id]?.y ?? node.position.y,
+                }}
+                onPointerDown={event => startDrag(node.id, event)}
+                onClick={() => setSelectedNodeId(node.id)}
+              >
+                {canAcceptIncoming(node.type) && (
+                  <button
+                    type="button"
+                    className="port in"
+                    title={t('workflow.connectTo')}
+                    style={getPortStyle('in')}
+                    onPointerUp={event => finishConnection(node.id, event)}
+                  />
                 )}
-                className="connection-line"
-                markerEnd="url(#workflow-arrow)"
-              />
+
+                {canEmitOutgoing(node.type) && (
+                  <button
+                    type="button"
+                    className="port out"
+                    title={t('workflow.connectFrom')}
+                    style={getPortStyle('out')}
+                    onPointerDown={event => startConnection(node.id, event)}
+                  />
+                )}
+
+                <div className="workflow-node-top">
+                  <span className="pill">{getNodeTypeLabel(node.type)}</span>
+                  {node.agent?.provider && <span className="pill subtle">{node.agent.provider}</span>}
+                </div>
+
+                <div className="workflow-node-title">{node.title}</div>
+                <div className="workflow-node-body">
+                  {node.prompt && <p>{node.prompt}</p>}
+                  {node.type === 'tool' && <p>{t('workflow.tool')}: {node.tool?.name}</p>}
+                  {node.type === 'condition' && <p>{node.condition?.expression}</p>}
+                  {node.type === 'prompt' && <p className="muted">{t('workflow.sourceOnly')}</p>}
+                </div>
+              </div>
             ))}
 
-            {previewSource && (
-              <path
-                d={buildConnectionPath(getPortPosition(previewSource, 'out', dragPositions[previewSource.id]), pointerOnCanvas)}
-                className="connection-line drafting"
-                markerEnd="url(#workflow-preview-arrow)"
-              />
+            {!workflow?.nodes.length && (
+              <div className="empty-state canvas-empty">
+                <h3>{t('common.noSelection')}</h3>
+                <p>{t('workflow.dragHint')}</p>
+              </div>
             )}
-          </svg>
-
-          {(workflow?.nodes ?? []).map(node => (
-            <div
-              key={node.id}
-              className={[
-                'workflow-node',
-                node.id === selectedNodeId ? 'selected' : '',
-                dragState?.nodeId === node.id ? 'dragging' : '',
-              ].filter(Boolean).join(' ')}
-              style={{
-                left: dragPositions[node.id]?.x ?? node.position.x,
-                top: dragPositions[node.id]?.y ?? node.position.y,
-              }}
-              onPointerDown={event => startDrag(node.id, event)}
-              onClick={() => setSelectedNodeId(node.id)}
-            >
-              {canAcceptIncoming(node.type) && (
-                <button
-                  type="button"
-                  className="port in"
-                  title={t('workflow.connectTo')}
-                  style={getPortStyle('in')}
-                  onPointerUp={event => finishConnection(node.id, event)}
-                />
-              )}
-
-              {canEmitOutgoing(node.type) && (
-                <button
-                  type="button"
-                  className="port out"
-                  title={t('workflow.connectFrom')}
-                  style={getPortStyle('out')}
-                  onPointerDown={event => startConnection(node.id, event)}
-                />
-              )}
-
-              <div className="workflow-node-top">
-                <span className="pill">{getNodeTypeLabel(node.type)}</span>
-                {node.agent?.provider && <span className="pill subtle">{node.agent.provider}</span>}
-              </div>
-
-              <div className="workflow-node-title">{node.title}</div>
-              <div className="workflow-node-body">
-                {node.prompt && <p>{node.prompt}</p>}
-                {node.type === 'tool' && <p>{t('workflow.tool')}: {node.tool?.name}</p>}
-                {node.type === 'condition' && <p>{node.condition?.expression}</p>}
-                {node.type === 'prompt' && <p className="muted">{t('workflow.sourceOnly')}</p>}
-              </div>
-            </div>
-          ))}
-
-          {!workflow?.nodes.length && (
-            <div className="empty-state canvas-empty">
-              <h3>{t('common.noSelection')}</h3>
-              <p>{t('workflow.dragHint')}</p>
-            </div>
-          )}
+          </div>
         </div>
 
         {runOutput && (
@@ -777,13 +809,22 @@ function normalizeWorkflow(workflow: WorkflowBlueprint): WorkflowBlueprint {
     : workflow
 }
 
-function getCanvasPoint(clientX: number, clientY: number, canvas: HTMLDivElement | null) {
+function getCanvasPoint(
+  clientX: number,
+  clientY: number,
+  canvas: HTMLDivElement | null,
+  zoom = 1,
+) {
   if (!canvas) return null
   const rect = canvas.getBoundingClientRect()
   return {
-    x: clientX - rect.left,
-    y: clientY - rect.top,
+    x: (clientX - rect.left) / zoom,
+    y: (clientY - rect.top) / zoom,
   }
+}
+
+function clampZoom(value: number) {
+  return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Number(value.toFixed(2))))
 }
 
 function getNodeTypeLabel(type: BlueprintNodeType): string {

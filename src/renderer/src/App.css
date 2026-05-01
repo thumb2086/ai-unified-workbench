@@ -261,6 +261,22 @@
   touch-action: none;
 }
 
+.canvas-viewport {
+  position: relative;
+  width: 2200px;
+  min-height: 1400px;
+}
+
+.zoom-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.zoom-controls button {
+  min-width: 40px;
+}
+
 .grid-overlay {
   position: absolute;
   inset: 0;
