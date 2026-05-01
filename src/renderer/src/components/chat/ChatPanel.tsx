@@ -105,9 +105,7 @@ export function ChatPanel() {
   const setWorkflowMode = (nextMode: ChatMode) => {
     setMode(nextMode)
     const preset = getPresetWorkflowId(nextMode)
-    if (preset) {
-      setWorkflowId(preset)
-    }
+    if (preset) setWorkflowId(preset)
   }
 
   const setPanelState = (nodeId: string, next: PanelState) => {
@@ -182,8 +180,8 @@ export function ChatPanel() {
             mode === 'relay'
               ? currentPrompt
               : index === 0
-                ? `你是主代理，請先整理任務並輸出可交辦的摘要：\n${currentPrompt}`
-                : `你是子代理，請根據主代理的輸出補充細節：\n${currentPrompt}`,
+                ? `你是主代理，請先規劃整體步驟並補充背景資訊：\n${currentPrompt}`
+                : `你是子代理，請根據前一個節點的內容補充細節與可執行步驟：\n${currentPrompt}`,
           )
 
           setPanelState(node.id, { status: 'done', content })
@@ -201,8 +199,8 @@ export function ChatPanel() {
           }))
 
           currentPrompt = mode === 'relay'
-            ? `${currentPrompt}\n\n${node.name}：\n${content}`
-            : `${content}\n\n請繼續補充下一步。`
+            ? `${currentPrompt}\n\n${node.name}：${content}`
+            : `${content}\n\n請把以上內容整理成下一個子代理可直接使用的版本。`
         } catch (error) {
           const message = error instanceof Error ? error.message : 'Request failed'
           setPanelState(node.id, { status: 'error', content: '', error: message })
@@ -222,8 +220,8 @@ export function ChatPanel() {
             const content = await sendToNode(
               node,
               round === 0
-                ? `請針對下列主題提出第一輪觀點：${debateTopic}`
-                : `請根據上輪內容繼續反駁或補充：${debateTopic}`,
+                ? `請針對以下主題提出你的第一輪觀點：${debateTopic}`
+                : `請根據前面的觀點，進行第二輪回應或反駁：${debateTopic}`,
             )
 
             setPanelState(node.id, { status: 'done', content })

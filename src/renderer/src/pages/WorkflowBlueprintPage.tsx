@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { useWorkbench } from '../hooks/useWorkbenchState'
 import { useI18n } from '../hooks/useI18n'
 import type { BlueprintNode, BlueprintNodeType, WorkflowBlueprint } from '../types/workbench'
@@ -6,7 +6,7 @@ import { executeWorkflow } from '../engine/workflow-engine'
 import { toWorkflowDefinition } from '../utils/workbench'
 
 const NODE_SIZE = { width: 220, height: 118 }
-const PORT_CENTER = 20
+const PORT_OFFSET = 20
 const NODE_TEMPLATES: BlueprintNodeType[] = ['prompt', 'agent', 'tool', 'condition', 'merge']
 
 export function WorkflowBlueprintPage() {
@@ -47,7 +47,7 @@ export function WorkflowBlueprintPage() {
   useEffect(() => {
     if (!draggingId && !connectFrom) return
 
-    const handleWindowMove = (event: MouseEvent) => {
+    const handleWindowMove = (event: PointerEvent) => {
       const rect = canvasRef.current?.getBoundingClientRect()
       if (!rect) return
 
@@ -56,27 +56,30 @@ export function WorkflowBlueprintPage() {
       setMousePos({ x, y })
 
       if (!draggingId || !workflow) return
-      const nextX = Math.max(20, x - dragOffset.x)
-      const nextY = Math.max(20, y - dragOffset.y)
+      const nextX = Math.max(0, x - dragOffset.x)
+      const nextY = Math.max(0, y - dragOffset.y)
 
       updateCurrentWorkflow(current => ({
         ...current,
         nodes: current.nodes.map(node =>
           node.id === draggingId
-            ? { ...node, position: { x: Math.round(nextX / 10) * 10, y: Math.round(nextY / 10) * 10 } }
+            ? { ...node, position: { x: Math.round(nextX), y: Math.round(nextY) } }
             : node,
         ),
         updatedAt: new Date().toISOString(),
       }))
     }
 
-    const handleWindowUp = () => setDraggingId(null)
+    const handleWindowUp = () => {
+      setDraggingId(null)
+      setConnectFrom(null)
+    }
 
-    window.addEventListener('mousemove', handleWindowMove)
-    window.addEventListener('mouseup', handleWindowUp)
+    window.addEventListener('pointermove', handleWindowMove)
+    window.addEventListener('pointerup', handleWindowUp)
     return () => {
-      window.removeEventListener('mousemove', handleWindowMove)
-      window.removeEventListener('mouseup', handleWindowUp)
+      window.removeEventListener('pointermove', handleWindowMove)
+      window.removeEventListener('pointerup', handleWindowUp)
     }
   }, [connectFrom, dragOffset.x, dragOffset.y, draggingId, workflow])
 
@@ -100,11 +103,15 @@ export function WorkflowBlueprintPage() {
       dependsOn: [],
       position,
       prompt: type === 'prompt' || type === 'agent' ? t('workflow.prompt') : undefined,
+      agent: type === 'agent'
+        ? { provider: aiNodes.find(item => item.enabled)?.provider ?? aiNodes[0]?.provider ?? 'chatgpt' }
+        : undefined,
       tool: type === 'tool' ? { name: 'fsRead', params: { filePath: '' } } : undefined,
       condition: type === 'condition'
         ? { expression: 'true', trueBranch: '', falseBranch: '' }
         : undefined,
-      aiNodeId: type === 'agent' ? aiNodes.find(node => node.enabled)?.id ?? aiNodes[0]?.id : undefined,
+      aiNodeId: type === 'agent' ? aiNodes.find(item => item.enabled)?.id ?? aiNodes[0]?.id : undefined,
+      outputVar: type === 'prompt' ? 'value' : undefined,
     }
 
     updateCurrentWorkflow(current => ({
@@ -150,6 +157,11 @@ export function WorkflowBlueprintPage() {
   }
 
   const toggleDependency = (nodeId: string, dependencyId: string) => {
+    if (!workflow) return
+    const target = workflow.nodes.find(node => node.id === nodeId)
+    const source = workflow.nodes.find(node => node.id === dependencyId)
+    if (!target || !source || !canConnectNodes(source, target)) return
+
     updateCurrentWorkflow(current => ({
       ...current,
       nodes: current.nodes.map(node => {
@@ -180,13 +192,22 @@ export function WorkflowBlueprintPage() {
         updatedAt: new Date().toISOString(),
       }
     })
+
     if (selectedNodeId === nodeId) setSelectedNodeId(null)
   }
 
-  const startDrag = (nodeId: string, event: ReactMouseEvent) => {
+  const startDrag = (nodeId: string, event: ReactPointerEvent) => {
     if (!workflow || event.button !== 0 || isInteractiveTarget(event.target)) return
     const node = workflow.nodes.find(item => item.id === nodeId)
     if (!node) return
+
+    event.preventDefault()
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId)
+    } catch {
+      // noop
+    }
+
     setDraggingId(nodeId)
     setSelectedNodeId(nodeId)
     setDragOffset({
@@ -195,7 +216,7 @@ export function WorkflowBlueprintPage() {
     })
   }
 
-  const handleCanvasMouseMove = (event: ReactMouseEvent) => {
+  const handleCanvasPointerMove = (event: ReactPointerEvent) => {
     const rect = canvasRef.current?.getBoundingClientRect()
     if (!rect) return
     setMousePos({
@@ -211,8 +232,9 @@ export function WorkflowBlueprintPage() {
 
   const handleConnectFinish = (nodeId: string) => {
     if (!workflow || !connectFrom || connectFrom === nodeId) return
+    const source = workflow.nodes.find(node => node.id === connectFrom)
     const target = workflow.nodes.find(node => node.id === nodeId)
-    if (target && !target.dependsOn.includes(connectFrom)) {
+    if (source && target && canConnectNodes(source, target) && !target.dependsOn.includes(connectFrom)) {
       toggleDependency(nodeId, connectFrom)
     }
     setConnectFrom(null)
@@ -326,7 +348,7 @@ export function WorkflowBlueprintPage() {
         <div
           ref={canvasRef}
           className="workflow-canvas"
-          onMouseMove={handleCanvasMouseMove}
+          onPointerMove={handleCanvasPointerMove}
           onMouseDown={event => {
             if (event.target === event.currentTarget) {
               setSelectedNodeId(null)
@@ -392,12 +414,14 @@ export function WorkflowBlueprintPage() {
               key={node.id}
               className={`workflow-node ${node.id === selectedNodeId ? 'selected' : ''} ${connectFrom === node.id ? 'connecting' : ''}`}
               style={{ left: node.position.x, top: node.position.y }}
-              onMouseDown={event => startDrag(node.id, event)}
+              onPointerDown={event => startDrag(node.id, event)}
               onClick={() => setSelectedNodeId(node.id)}
             >
               <div className="workflow-node-top">
                 <span className="pill">{getNodeTypeLabel(node.type)}</span>
-                {node.aiNodeId && <span className="pill subtle">{node.aiNodeId}</span>}
+                {(node.agent?.provider || node.aiNodeId) && (
+                  <span className="pill subtle">{node.agent?.provider || node.aiNodeId}</span>
+                )}
               </div>
 
               <div className="workflow-node-title">{node.title}</div>
@@ -405,27 +429,32 @@ export function WorkflowBlueprintPage() {
                 {node.prompt && <p>{node.prompt}</p>}
                 {node.type === 'tool' && <p>{t('workflow.tool')}: {node.tool?.name}</p>}
                 {node.type === 'condition' && <p>{node.condition?.expression}</p>}
+                {node.type === 'prompt' && <p className="muted">{t('workflow.sourceOnly')}</p>}
               </div>
 
               <div className="node-ports">
-                <button
-                  type="button"
-                  className="port out"
-                  title={t('workflow.connectFrom')}
-                  onClick={event => {
-                    event.stopPropagation()
-                    handleConnectStart(node.id)
-                  }}
-                />
-                <button
-                  type="button"
-                  className="port in"
-                  title={t('workflow.connectTo')}
-                  onClick={event => {
-                    event.stopPropagation()
-                    handleConnectFinish(node.id)
-                  }}
-                />
+                {canEmitOutgoing(node.type) && (
+                  <button
+                    type="button"
+                    className="port out"
+                    title={t('workflow.connectFrom')}
+                    onClick={event => {
+                      event.stopPropagation()
+                      handleConnectStart(node.id)
+                    }}
+                  />
+                )}
+                {canAcceptIncoming(node.type) && (
+                  <button
+                    type="button"
+                    className="port in"
+                    title={t('workflow.connectTo')}
+                    onClick={event => {
+                      event.stopPropagation()
+                      handleConnectFinish(node.id)
+                    }}
+                  />
+                )}
               </div>
             </div>
           ))}
@@ -563,7 +592,7 @@ export function WorkflowBlueprintPage() {
                           },
                         })
                       } catch {
-                        // allow temporary invalid JSON while editing
+                        // keep editing state even if JSON is temporarily invalid
                       }
                     }}
                   />
@@ -629,28 +658,41 @@ export function WorkflowBlueprintPage() {
 
             <div className="card stack">
               <div className="section-title">{t('common.dependencies')}</div>
-              {workflow.nodes.filter(node => node.id !== currentNode.id).map(node => (
-                <label key={node.id} className="checkbox-row">
-                  <input
-                    type="checkbox"
-                    checked={currentNode.dependsOn.includes(node.id)}
-                    onChange={() => toggleDependency(currentNode.id, node.id)}
-                  />
-                  <span>{node.title}</span>
-                </label>
-              ))}
-              <button
-                onClick={() => {
-                  if (connectFrom && connectFrom !== currentNode.id) {
-                    toggleDependency(currentNode.id, connectFrom)
-                    setConnectFrom(null)
-                  } else {
-                    setConnectFrom(currentNode.id)
-                  }
-                }}
-              >
-                {connectFrom === currentNode.id ? t('common.cancel') : t('workflow.linkFrom')}
-              </button>
+              {currentNode.type === 'prompt' ? (
+                <div className="warning-box">
+                  <strong>{t('workflow.sourceOnly')}</strong>
+                  <p className="muted">{t('workflow.connectionLocked')}</p>
+                </div>
+              ) : (
+                <>
+                  {workflow.nodes.filter(node => node.id !== currentNode.id).map(node => {
+                    const disabled = !canConnectNodes(node, currentNode)
+                    return (
+                      <label key={node.id} className={`checkbox-row ${disabled ? 'disabled' : ''}`}>
+                        <input
+                          type="checkbox"
+                          checked={currentNode.dependsOn.includes(node.id)}
+                          disabled={disabled}
+                          onChange={() => toggleDependency(currentNode.id, node.id)}
+                        />
+                        <span>{node.title}</span>
+                      </label>
+                    )
+                  })}
+                  <button
+                    onClick={() => {
+                      if (connectFrom && connectFrom !== currentNode.id) {
+                        toggleDependency(currentNode.id, connectFrom)
+                        setConnectFrom(null)
+                      } else {
+                        setConnectFrom(currentNode.id)
+                      }
+                    }}
+                  >
+                    {connectFrom === currentNode.id ? t('common.cancel') : t('workflow.linkFrom')}
+                  </button>
+                </>
+              )}
             </div>
           </div>
         )}
@@ -698,12 +740,27 @@ function isInteractiveTarget(target: EventTarget | null): boolean {
   return Boolean(target.closest('button, input, textarea, select, label, option, a'))
 }
 
+function canAcceptIncoming(type: BlueprintNodeType): boolean {
+  return type !== 'prompt'
+}
+
+function canEmitOutgoing(type: BlueprintNodeType): boolean {
+  return true
+}
+
+function canConnectNodes(source: BlueprintNode, target: BlueprintNode): boolean {
+  if (source.id === target.id) return false
+  if (!canEmitOutgoing(source.type)) return false
+  if (!canAcceptIncoming(target.type)) return false
+  return true
+}
+
 function getPortPosition(node: BlueprintNode, side: 'in' | 'out') {
   return {
     x: side === 'in'
-      ? node.position.x + PORT_CENTER
-      : node.position.x + NODE_SIZE.width - PORT_CENTER,
-    y: node.position.y + NODE_SIZE.height - PORT_CENTER,
+      ? node.position.x + PORT_OFFSET
+      : node.position.x + NODE_SIZE.width - PORT_OFFSET,
+    y: node.position.y + NODE_SIZE.height / 2,
   }
 }
 

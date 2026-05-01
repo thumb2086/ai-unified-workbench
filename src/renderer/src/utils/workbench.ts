@@ -41,7 +41,7 @@ export function toWorkflowNode(node: BlueprintNode): WorkflowNode {
     agent: node.type === 'agent'
       ? {
           aiNodeId: node.aiNodeId,
-          provider: undefined,
+          provider: node.agent?.provider,
           role: node.title,
         }
       : undefined,

@@ -301,9 +301,14 @@
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28);
   cursor: grab;
   user-select: none;
+  touch-action: none;
   display: grid;
   gap: 10px;
   z-index: 2;
+}
+
+.workflow-node:active {
+  cursor: grabbing;
 }
 
 .workflow-node.selected {
@@ -349,15 +354,16 @@
 
 .node-ports {
   position: absolute;
-  inset: auto 12px 12px;
+  inset: 50% 12px auto;
+  transform: translateY(-50%);
   display: flex;
   justify-content: space-between;
   gap: 12px;
 }
 
 .port {
-  width: 16px;
-  height: 16px;
+  width: 20px;
+  height: 20px;
   padding: 0;
   border-radius: 999px;
   border: 2px solid rgba(148, 163, 184, 0.7);
@@ -377,6 +383,27 @@
 
 .workflow-node .port {
   cursor: pointer;
+}
+
+.workflow-node .port:hover {
+  transform: scale(1.05);
+}
+
+.warning-box {
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  background: rgba(120, 53, 15, 0.16);
+  color: #fde68a;
+}
+
+.warning-box p {
+  margin: 8px 0 0;
+}
+
+.checkbox-row.disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .canvas-empty {
