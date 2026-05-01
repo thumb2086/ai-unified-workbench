@@ -112,8 +112,10 @@ export function createDefaultWorkflows(): WorkflowBlueprint[] {
 
 export function mergeBuiltinWorkflows(workflows: WorkflowBlueprint[]): WorkflowBlueprint[] {
   const builtin = createDefaultWorkflows()
+  const storedById = new Map(workflows.map(workflow => [workflow.id, workflow]))
+  const mergedBuiltin = builtin.map(workflow => storedById.get(workflow.id) ?? workflow)
   const custom = workflows.filter(workflow => !BUILTIN_WORKFLOW_IDS.has(workflow.id))
-  return [...builtin, ...custom]
+  return [...mergedBuiltin, ...custom]
 }
 
 function createSimplePromptChain(now: string): WorkflowBlueprint {
