@@ -8,7 +8,7 @@ import {
   removeBrowserSession,
   saveBrowserSessions,
 } from '../../services/browser-session-store'
-import { clearBrowserSession, openBrowser } from '../../services/api'
+import { clearBrowserSession } from '../../services/api'
 import { SlotManager } from './SlotManager'
 import { WebviewSlot as WebviewSlotComponent } from './WebviewSlot'
 import './WebviewPool.css'
@@ -66,71 +66,39 @@ export function WebviewPool() {
     setIsOpeningNodeId(node.id)
 
     const url = node.webUrl || getDefaultUrl(node.provider)
+    const sessionId = forceNew || !node.sessionId
+      ? `session_${node.provider}_${node.id}_${Date.now()}`
+      : node.sessionId
     const session = createBrowserSessionRecord(
       node.provider,
       node.name,
       url,
-      forceNew ? undefined : node.sessionId,
+      sessionId,
       {
         label: node.accountLabel,
         key: node.accountKey,
       },
     )
 
-    setSlots(prev => [
-      { ...session, status: 'loading' },
-      ...prev.filter(slot => slot.sessionId !== session.sessionId),
-    ])
-
-    try {
-      const result = await openBrowser(node.provider, url, {
-        providerName: node.name,
-        sessionId: forceNew ? undefined : session.sessionId,
-        forceNew,
-        accountLabel: node.accountLabel,
-        accountKey: node.accountKey,
-      })
-
-      if (result.error) {
-        throw new Error(result.error)
-      }
-
-      const sessionId = result.sessionId || session.sessionId
-      const next: BrowserSessionRecord = {
-        ...session,
-        sessionId,
-        providerName: node.name,
-        url,
-        status: 'ready',
-        lastError: undefined,
-        lastActiveAt: new Date().toISOString(),
-      }
-
-      setSlots(prev => [
-        next,
-        ...prev.filter(slot => slot.sessionId !== session.sessionId && slot.sessionId !== sessionId),
-      ])
-      setSelectedSlotId(sessionId)
-      updateAiNode(node.id, current => ({
-        ...current,
-        sessionId,
-        webUrl: url,
-        updatedAt: new Date().toISOString(),
-      }))
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to open browser session'
-      setSlots(prev =>
-        prev.map(slot =>
-          slot.sessionId === session.sessionId
-            ? { ...slot, status: 'error', lastError: message, lastActiveAt: new Date().toISOString() }
-            : slot,
-        ),
-      )
-      window.alert(message)
-    } finally {
-      setIsOpeningNodeId(null)
-      refreshSlots()
+    const next: BrowserSessionRecord = {
+      ...session,
+      status: 'loading',
+      lastError: undefined,
+      lastActiveAt: new Date().toISOString(),
     }
+
+    setSlots(prev => [
+      next,
+      ...prev.filter(slot => slot.sessionId !== sessionId),
+    ])
+    setSelectedSlotId(sessionId)
+    updateAiNode(node.id, current => ({
+      ...current,
+      sessionId,
+      webUrl: url,
+      updatedAt: new Date().toISOString(),
+    }))
+    setIsOpeningNodeId(null)
   }
 
   const activateSlot = async (slot: BrowserSessionRecord) => {
@@ -149,20 +117,13 @@ export function WebviewPool() {
       ),
     )
 
-    const result = await openBrowser(slot.providerId, slot.url, {
-      providerName: slot.providerName,
-      sessionId: slot.sessionId,
-      accountLabel: slot.accountLabel,
-      accountKey: slot.accountKey,
-    })
-
     setSlots(prev =>
       prev.map(item =>
         item.sessionId === slot.sessionId
           ? {
               ...item,
-              status: result.error ? 'error' : 'ready',
-              lastError: result.error,
+              status: 'loading',
+              lastError: undefined,
               lastActiveAt: new Date().toISOString(),
             }
           : item,
@@ -299,6 +260,13 @@ export function WebviewPool() {
                   onRemove={(slot) => void handleRemoveSlot(slot)}
                   onClear={(slot) => void handleRemoveSlot(slot)}
                   onRename={(slot) => void handleRenameSlot(slot)}
+                  onStatusChange={(slot, patch) => {
+                    setSlots(prev => prev.map(item =>
+                      item.sessionId === slot.sessionId
+                        ? { ...item, ...patch, lastActiveAt: new Date().toISOString() }
+                        : item,
+                    ))
+                  }}
                 />
               ) : (
                 <div className="empty-state">

@@ -1,5 +1,5 @@
 // Use require for CommonJS compatibility
-const { ipcMain, BrowserWindow } = require('electron')
+const { ipcMain, BrowserWindow, webContents } = require('electron')
 import { configureSessionPartition, generatePartition, clearSession } from './session-manager'
 import * as fs from 'fs/promises'
 import * as path from 'path'
@@ -918,9 +918,7 @@ async function handleAgentBroadcast(
  * This is called via IPC from the renderer process
  */
 export function registerWebview(slotId: string, webContentsId: number): void {
-  const wc = BrowserWindow.getAllWindows()
-    .flatMap((w: any) => w.webContents)
-    .find((wc: any) => wc.id === webContentsId)
+  const wc = webContents.fromId(webContentsId)
 
   if (wc) {
     activeWebviews.set(slotId, wc)

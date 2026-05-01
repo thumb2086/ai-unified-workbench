@@ -19,7 +19,8 @@ function createWindow() {
       nodeIntegration: false,
       sandbox: false,
       webSecurity: false, // Allow embedding AI sites
-      allowRunningInsecureContent: true
+      allowRunningInsecureContent: true,
+      webviewTag: true
     }
   })
 
