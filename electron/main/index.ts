@@ -24,9 +24,15 @@ function createWindow() {
     }
   })
 
+  win.webContents.on('will-attach-webview', (_event: any, webPreferences: any) => {
+    webPreferences.nodeIntegration = false
+    webPreferences.contextIsolation = true
+    webPreferences.sandbox = false
+  })
+
   // Handle webview attachment
   win.webContents.on('did-attach-webview', (_: any, wc: any) => {
-    // Webview attached - will be registered via IPC with slotId
+    wc.setWindowOpenHandler(({ url }: { url: string }) => ({ action: 'allow', overrideBrowserWindowOptions: { show: false } }))
   })
 
   if (isDev) {

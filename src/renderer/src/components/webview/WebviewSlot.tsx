@@ -18,6 +18,8 @@ type WebviewElement = HTMLElement & {
   getWebContentsId?: () => number
 }
 
+const ATTACH_TIMEOUT_MS = 7000
+
 export function WebviewSlot({
   slot,
   isSelected,
@@ -64,18 +66,33 @@ export function WebviewSlot({
   useEffect(() => {
     const webview = webviewRef.current
     if (!webview || !partition) return
+    let attached = false
 
     const register = () => {
       try {
         const webContentsId = webview.getWebContentsId?.()
         if (webContentsId) {
+          attached = true
           void window.aiWorkbench.registerWebview(slot.sessionId, webContentsId)
+          return true
         }
       } catch {
         // Registration can fail while Electron is still attaching the webview.
       }
+      return false
     }
 
+    const attachTimer = window.setTimeout(() => {
+      if (attached || register()) return
+      const message = '內嵌網頁沒有成功啟用，請完整關閉 app 後重開，讓 Electron 載入 webviewTag 設定。'
+      setError(message)
+      onStatusChange?.(slot, { status: 'error', lastError: message })
+    }, ATTACH_TIMEOUT_MS)
+
+    const handleDidAttach = () => {
+      register()
+      onStatusChange?.(slot, { status: 'loading', lastError: undefined })
+    }
     const handleDomReady = () => {
       register()
       onStatusChange?.(slot, { status: 'ready', lastError: undefined })
@@ -88,12 +105,16 @@ export function WebviewSlot({
       onStatusChange?.(slot, { status: 'error', lastError: message })
     }
 
+    webview.addEventListener('did-attach', handleDidAttach)
     webview.addEventListener('dom-ready', handleDomReady)
     webview.addEventListener('did-start-loading', handleDidStartLoading)
     webview.addEventListener('did-stop-loading', handleDidStopLoading)
     webview.addEventListener('did-fail-load', handleDidFailLoad)
+    register()
 
     return () => {
+      window.clearTimeout(attachTimer)
+      webview.removeEventListener('did-attach', handleDidAttach)
       webview.removeEventListener('dom-ready', handleDomReady)
       webview.removeEventListener('did-start-loading', handleDidStartLoading)
       webview.removeEventListener('did-stop-loading', handleDidStopLoading)
