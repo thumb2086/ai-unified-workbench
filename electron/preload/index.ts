@@ -74,6 +74,38 @@ const aiWorkbenchAPI = {
   },
 
   // ==========================================================================
+  // Browser Session Management
+  // ==========================================================================
+
+  async browserOpen(payload: { providerId: string; url: string; sessionId?: string; providerName?: string; forceNew?: boolean }): Promise<{ sessionId?: string; providerId?: string; url?: string; status?: string; error?: string }> {
+    return ipcRenderer.invoke('browser:open', payload)
+  },
+
+  async browserSend(sessionId: string, prompt: string): Promise<ToolResult> {
+    return ipcRenderer.invoke('browser:send', { sessionId, prompt })
+  },
+
+  async browserRead(sessionId: string): Promise<{ content?: string; status?: string; error?: string }> {
+    return ipcRenderer.invoke('browser:read', { sessionId })
+  },
+
+  async browserClose(sessionId: string): Promise<ToolResult> {
+    return ipcRenderer.invoke('browser:close', { sessionId })
+  },
+
+  async browserClear(sessionId: string): Promise<ToolResult> {
+    return ipcRenderer.invoke('browser:clear', { sessionId })
+  },
+
+  async browserCloseAll(): Promise<ToolResult> {
+    return ipcRenderer.invoke('browser:close-all')
+  },
+
+  async browserList(): Promise<{ id: string; providerId: string; providerName: string; url: string; createdAt: number; updatedAt: number; hasPrompt: boolean }[]> {
+    return ipcRenderer.invoke('browser:list')
+  },
+
+  // ==========================================================================
   // Tool Calls (restricted to Tool Agent)
   // ==========================================================================
 

@@ -110,7 +110,7 @@ export function AiNodesPage() {
             >
               <span className="node-list-title">{node.name}</span>
               <span className="pill">{node.kind.toUpperCase()}</span>
-              <span className={`status-dot ${node.enabled ? 'ok' : 'off'}`} />
+              <span className={`status-dot ${getNodeStatusTone(node)}`} />
             </button>
           ))}
         </div>
@@ -200,7 +200,7 @@ export function AiNodesPage() {
                 <div className="section-title">{t('nodes.web')} · {t('nodes.webStatus')}</div>
                 <p className="muted">{t('nodes.openWebHint')}</p>
                 <div className="row">
-                  <span className={`pill ${activeNode.sessionId ? 'done' : 'idle'}`}>
+                  <span className={`pill ${activeNode.sessionId ? 'done' : 'warning'}`}>
                     {activeNode.sessionId ? t('nodes.opened') : t('nodes.notOpened')}
                   </span>
                   <button className="primary" onClick={() => void handleOpenWeb()}>
@@ -308,4 +308,10 @@ function parseHeaders(input: string): Record<string, string> | undefined {
   } catch {
     return undefined
   }
+}
+
+function getNodeStatusTone(node: AiNode): 'ok' | 'warning' | 'off' {
+  if (!node.enabled) return 'off'
+  if (node.kind === 'web' && !node.sessionId) return 'warning'
+  return 'ok'
 }

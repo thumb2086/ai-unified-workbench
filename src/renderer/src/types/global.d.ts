@@ -22,6 +22,15 @@ declare global {
       clearSession(slotId: string): Promise<ToolResult>
       registerWebview(slotId: string, webContentsId: number): Promise<{ success: boolean }>
 
+      // Browser Sessions
+      browserOpen(payload: { providerId: string; url: string; sessionId?: string; providerName?: string; forceNew?: boolean }): Promise<{ sessionId?: string; providerId?: string; url?: string; status?: string; error?: string }>
+      browserSend(sessionId: string, prompt: string): Promise<ToolResult>
+      browserRead(sessionId: string): Promise<{ content?: string; status?: string; error?: string }>
+      browserClose(sessionId: string): Promise<ToolResult>
+      browserClear(sessionId: string): Promise<ToolResult>
+      browserCloseAll(): Promise<ToolResult>
+      browserList(): Promise<Array<{ id: string; providerId: string; providerName: string; url: string; createdAt: number; updatedAt: number; hasPrompt: boolean }>>
+
       // Tools
       fsRead(filePath: string): Promise<ToolResult>
       fsWrite(filePath: string, content: string): Promise<ToolResult>

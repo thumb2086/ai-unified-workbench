@@ -208,6 +208,11 @@
   background: rgba(148, 163, 184, 0.12);
 }
 
+.pill.warning {
+  background: rgba(245, 158, 11, 0.16);
+  color: #fcd34d;
+}
+
 .pill.working,
 .pill.running {
   background: rgba(245, 158, 11, 0.16);
@@ -234,6 +239,10 @@
 
 .status-dot.ok {
   background: #22c55e;
+}
+
+.status-dot.warning {
+  background: #f59e0b;
 }
 
 .status-dot.off {

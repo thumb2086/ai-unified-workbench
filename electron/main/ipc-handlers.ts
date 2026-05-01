@@ -16,6 +16,68 @@ type WebContents = any
 // Store active webview references
 const activeWebviews = new Map<string, WebContents>()
 
+interface BrowserSessionWindow {
+  id: string
+  providerId: string
+  providerName: string
+  url: string
+  window: any
+  createdAt: number
+  updatedAt: number
+  lastPrompt?: string
+}
+
+interface BrowserSessionSummary {
+  id: string
+  providerId: string
+  providerName: string
+  url: string
+  createdAt: number
+  updatedAt: number
+  hasPrompt: boolean
+}
+
+const browserSessions = new Map<string, BrowserSessionWindow>()
+
+const BROWSER_SITE_CONFIGS: Record<string, {
+  inputSelector: string
+  sendButtonSelector?: string
+  responseSelector?: string
+  sendKey?: string
+  waitForResponse?: number
+}> = {
+  chatgpt: {
+    inputSelector: '#prompt-textarea, textarea[placeholder*="Message"], textarea[placeholder*="Ask"], [contenteditable="true"]',
+    sendButtonSelector: 'button[data-testid="send-button"], button[aria-label*="Send"]',
+    responseSelector: '[data-message-author-role="assistant"]:last-child, .markdown:last-child',
+    sendKey: 'Enter',
+    waitForResponse: 3000,
+  },
+  gemini: {
+    inputSelector: 'textarea[placeholder*="Enter"], textarea[placeholder*="輸入"], [contenteditable="true"]',
+    sendButtonSelector: 'button[aria-label*="Send"], button.send-button',
+    responseSelector: '.response-content, .message-content, [data-testid="response"]',
+    sendKey: 'Enter',
+    waitForResponse: 3000,
+  },
+  claude: {
+    inputSelector: 'textarea[placeholder*="Message"], textarea[placeholder*="Ask"], [contenteditable="true"]',
+    sendButtonSelector: 'button[type="submit"], button[aria-label*="Send"]',
+    responseSelector: '.claude-message, .message-content, [data-testid="assistant-message"]',
+    sendKey: 'Enter',
+    waitForResponse: 4000,
+  },
+  grok: {
+    inputSelector: 'textarea, [contenteditable="true"], input[type="text"]',
+    sendButtonSelector: 'button[type="submit"]',
+    responseSelector: '.message-content, .response, [data-testid="response"]',
+    sendKey: 'Enter',
+    waitForResponse: 3000,
+  },
+}
+
+type BrowserSiteConfig = (typeof BROWSER_SITE_CONFIGS)[keyof typeof BROWSER_SITE_CONFIGS]
+
 // Tool execution result
 interface ToolResult {
   success: boolean
@@ -50,6 +112,15 @@ export function registerIpcHandlers(): void {
 
   // Agent coordination
   ipcMain.handle('agent:broadcast', handleAgentBroadcast)
+
+  // Browser sessions
+  ipcMain.handle('browser:open', handleBrowserOpen)
+  ipcMain.handle('browser:send', handleBrowserSend)
+  ipcMain.handle('browser:read', handleBrowserRead)
+  ipcMain.handle('browser:close', handleBrowserClose)
+  ipcMain.handle('browser:clear', handleBrowserClear)
+  ipcMain.handle('browser:close-all', handleBrowserCloseAll)
+  ipcMain.handle('browser:list', handleBrowserList)
 
   // Chrome profiles
   ipcMain.handle('chrome:listProfiles', handleListChromeProfiles)
@@ -238,6 +309,336 @@ async function handleClearSession(
       error: error instanceof Error ? error.message : 'Failed to clear session'
     }
   }
+}
+
+// ============================================================================
+// Browser Session Handlers
+// ============================================================================
+
+interface BrowserOpenPayload {
+  providerId: string
+  url: string
+  sessionId?: string
+  providerName?: string
+  forceNew?: boolean
+}
+
+async function handleBrowserOpen(
+  _event: IpcMainInvokeEvent,
+  payload: BrowserOpenPayload
+): Promise<{ sessionId?: string; providerId?: string; url?: string; status?: string; error?: string }> {
+  const { providerId, url, sessionId: requestedSessionId, providerName, forceNew } = payload
+
+  if (!providerId || !url) {
+    return { error: 'Missing providerId or url' }
+  }
+
+  const sessionId = requestedSessionId || `session_${providerId}_${Date.now()}`
+
+  try {
+    const session = forceNew
+      ? await createBrowserSession(sessionId, providerId, providerName || providerId, url)
+      : await getOrCreateBrowserSession(sessionId, providerId, providerName || providerId, url)
+
+    await focusBrowserSession(session, url)
+
+    return {
+      sessionId: session.id,
+      providerId: session.providerId,
+      url: session.url,
+      status: 'opened',
+    }
+  } catch (error: any) {
+    console.error('Browser open error:', error)
+    return { error: error.message || 'Failed to open browser session' }
+  }
+}
+
+async function handleBrowserSend(
+  _event: IpcMainInvokeEvent,
+  payload: { sessionId: string; prompt: string }
+): Promise<ToolResult> {
+  const session = browserSessions.get(payload.sessionId)
+  if (!session) {
+    return { success: false, error: 'Session not found' }
+  }
+
+  const config = BROWSER_SITE_CONFIGS[session.providerId]
+  if (!config) {
+    return { success: false, error: 'No automation config for this provider' }
+  }
+
+  try {
+    await session.window.webContents.executeJavaScript(buildSendScript(payload.prompt, config), true)
+    session.lastPrompt = payload.prompt
+    session.updatedAt = Date.now()
+    session.url = session.window.webContents.getURL() || session.url
+    return { success: true, data: { status: 'sent' } }
+  } catch (error: any) {
+    console.error('Browser send error:', error)
+    return { success: false, error: error.message || 'Failed to send prompt' }
+  }
+}
+
+async function handleBrowserRead(
+  _event: IpcMainInvokeEvent,
+  payload: { sessionId: string }
+): Promise<{ content?: string; status?: string; error?: string }> {
+  const session = browserSessions.get(payload.sessionId)
+  if (!session) {
+    return { error: 'Session not found' }
+  }
+
+  const config = BROWSER_SITE_CONFIGS[session.providerId]
+  if (!config || !config.responseSelector) {
+    return { error: 'No read config for this provider' }
+  }
+
+  try {
+    if (config.waitForResponse) {
+      await delay(config.waitForResponse)
+    }
+
+    const content = await session.window.webContents.executeJavaScript(buildReadScript(config), true)
+    session.updatedAt = Date.now()
+    session.url = session.window.webContents.getURL() || session.url
+    return { content: String(content || ''), status: content ? 'success' : 'no_response' }
+  } catch (error: any) {
+    console.error('Browser read error:', error)
+    return { error: error.message || 'Failed to read response' }
+  }
+}
+
+async function handleBrowserClose(
+  _event: IpcMainInvokeEvent,
+  payload: { sessionId: string }
+): Promise<ToolResult> {
+  try {
+    await closeBrowserSession(payload.sessionId)
+    return { success: true, data: { status: 'closed' } }
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Failed to close browser session' }
+  }
+}
+
+async function handleBrowserClear(
+  _event: IpcMainInvokeEvent,
+  payload: { sessionId: string }
+): Promise<ToolResult> {
+  try {
+    await closeBrowserSession(payload.sessionId)
+    await clearSession(generatePartition(payload.sessionId))
+    return { success: true, data: { status: 'cleared' } }
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Failed to clear browser session' }
+  }
+}
+
+async function handleBrowserCloseAll(): Promise<ToolResult> {
+  try {
+    await closeAllBrowserSessions()
+    return { success: true, data: { status: 'all closed' } }
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Failed to close browser sessions' }
+  }
+}
+
+function handleBrowserList(): BrowserSessionSummary[] {
+  return Array.from(browserSessions.values()).map(session => ({
+    id: session.id,
+    providerId: session.providerId,
+    providerName: session.providerName,
+    url: session.url,
+    createdAt: session.createdAt,
+    updatedAt: session.updatedAt,
+    hasPrompt: Boolean(session.lastPrompt),
+  }))
+}
+
+async function createBrowserSession(
+  sessionId: string,
+  providerId: string,
+  providerName: string,
+  url: string,
+): Promise<BrowserSessionWindow> {
+  await closeBrowserSession(sessionId)
+
+  const partition = generatePartition(sessionId)
+  configureSessionPartition(partition)
+
+  const window = new BrowserWindow({
+    width: 1400,
+    height: 960,
+    minWidth: 1024,
+    minHeight: 720,
+    title: providerName,
+    backgroundColor: '#0b0f19',
+    autoHideMenuBar: true,
+    webPreferences: {
+      partition,
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,
+      webSecurity: false,
+      allowRunningInsecureContent: true,
+    },
+  })
+
+  const session: BrowserSessionWindow = {
+    id: sessionId,
+    providerId,
+    providerName,
+    url,
+    window,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  }
+
+  browserSessions.set(sessionId, session)
+  window.on('closed', () => {
+    browserSessions.delete(sessionId)
+  })
+
+  await window.loadURL(url)
+  session.url = url
+  return session
+}
+
+async function getOrCreateBrowserSession(
+  sessionId: string,
+  providerId: string,
+  providerName: string,
+  url: string,
+): Promise<BrowserSessionWindow> {
+  const existing = browserSessions.get(sessionId)
+  if (existing && !existing.window.isDestroyed()) {
+    existing.providerId = providerId
+    existing.providerName = providerName
+    existing.url = url
+    existing.updatedAt = Date.now()
+    return existing
+  }
+
+  const duplicate = Array.from(browserSessions.values()).find(session => session.providerId === providerId && !session.window.isDestroyed())
+  if (duplicate) {
+    duplicate.providerName = providerName
+    duplicate.url = url
+    duplicate.updatedAt = Date.now()
+    browserSessions.set(sessionId, duplicate)
+    if (duplicate.id !== sessionId) {
+      browserSessions.delete(duplicate.id)
+      duplicate.id = sessionId
+    }
+    return duplicate
+  }
+
+  return createBrowserSession(sessionId, providerId, providerName, url)
+}
+
+async function focusBrowserSession(session: BrowserSessionWindow, url: string): Promise<void> {
+  if (session.window.isDestroyed()) {
+    throw new Error('Browser window is destroyed')
+  }
+
+  if (!session.window.isVisible()) {
+    session.window.show()
+  }
+
+  session.window.focus()
+
+  const currentUrl = session.window.webContents.getURL()
+  if (!currentUrl || currentUrl !== url) {
+    await session.window.loadURL(url)
+  }
+
+  session.updatedAt = Date.now()
+  session.url = session.window.webContents.getURL() || url
+}
+
+async function closeBrowserSession(sessionId: string): Promise<void> {
+  const session = browserSessions.get(sessionId)
+  if (!session) return
+
+  try {
+    if (!session.window.isDestroyed()) {
+      session.window.removeAllListeners('closed')
+      session.window.close()
+    }
+  } finally {
+    browserSessions.delete(sessionId)
+  }
+}
+
+async function closeAllBrowserSessions(): Promise<void> {
+  for (const sessionId of [...browserSessions.keys()]) {
+    await closeBrowserSession(sessionId)
+  }
+}
+
+function buildSendScript(prompt: string, config: BrowserSiteConfig): string {
+  const promptJson = JSON.stringify(prompt)
+  const inputSelector = JSON.stringify(config.inputSelector)
+  const sendButtonSelector = JSON.stringify(config.sendButtonSelector || '')
+  const sendKey = JSON.stringify(config.sendKey || 'Enter')
+
+  return `
+    (() => {
+      const prompt = ${promptJson};
+      const inputSelector = ${inputSelector};
+      const sendButtonSelector = ${sendButtonSelector};
+      const sendKey = ${sendKey};
+      const input = document.querySelector(inputSelector);
+      if (!input) return { error: 'Input not found' };
+
+      const setNativeValue = (element, value) => {
+        const valueSetter = Object.getOwnPropertyDescriptor(element.__proto__, 'value')?.set
+          || Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+          || Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
+        if (valueSetter) {
+          valueSetter.call(element, value);
+        } else {
+          element.value = value;
+        }
+        element.dispatchEvent(new Event('input', { bubbles: true }));
+        element.dispatchEvent(new Event('change', { bubbles: true }));
+      };
+
+      if (input.isContentEditable) {
+        input.focus();
+        input.textContent = prompt;
+        input.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: prompt }));
+      } else {
+        setNativeValue(input, prompt);
+      }
+
+      const sendButton = sendButtonSelector ? document.querySelector(sendButtonSelector) : null;
+      if (sendButton) {
+        sendButton.click();
+        return { status: 'sent' };
+      }
+
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: sendKey, bubbles: true }));
+      input.dispatchEvent(new KeyboardEvent('keyup', { key: sendKey, bubbles: true }));
+      return { status: 'sent' };
+    })()
+  `
+}
+
+function buildReadScript(config: BrowserSiteConfig): string {
+  const responseSelector = JSON.stringify(config.responseSelector || '')
+  return `
+    (() => {
+      const selector = ${responseSelector};
+      if (!selector) return '';
+      const responses = Array.from(document.querySelectorAll(selector));
+      const lastResponse = responses[responses.length - 1];
+      return lastResponse ? (lastResponse.innerText || lastResponse.textContent || '') : '';
+    })()
+  `
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms))
 }
 
 // ============================================================================
