@@ -16,7 +16,7 @@ const NODE_WIDTH = 240
 const NODE_MIN_HEIGHT = 132
 const PORT_RADIUS = 11
 const DEFAULT_CANVAS_POINT = { x: 0, y: 0 }
-const NODE_TEMPLATES: BlueprintNodeType[] = ['prompt', 'agent', 'tool', 'condition', 'merge']
+const NODE_TEMPLATES: BlueprintNodeType[] = ['prompt', 'agent', 'tool', 'condition', 'merge', 'output']
 const MIN_ZOOM = 0.25
 const MAX_ZOOM = 2
 const ZOOM_STEP = 0.1
@@ -168,7 +168,7 @@ export function WorkflowBlueprintPage() {
         ? { expression: 'true', trueBranch: '', falseBranch: '' }
         : undefined,
       aiNodeId: type === 'agent' ? aiNodes.find(item => item.enabled)?.id ?? aiNodes[0]?.id : undefined,
-      outputVar: type === 'prompt' ? 'value' : undefined,
+      outputVar: type === 'prompt' ? 'value' : type === 'output' ? 'final_output' : undefined,
     }
 
     updateCurrentWorkflow(current => ({
@@ -258,16 +258,28 @@ export function WorkflowBlueprintPage() {
       rowsByLevel.set(level, [...(rowsByLevel.get(level) ?? []), node])
     })
 
+    const sortedRows = new Map<number, BlueprintNode[]>()
+    Array.from(rowsByLevel.entries()).forEach(([level, nodes]) => {
+      const sorted = [...nodes].sort((a, b) => {
+        const aParentY = getAverageParentY(a, workflow.nodes)
+        const bParentY = getAverageParentY(b, workflow.nodes)
+        return aParentY - bParentY || a.position.y - b.position.y
+      })
+      sortedRows.set(level, sorted)
+    })
+
     updateCurrentWorkflow(current => ({
       ...current,
       nodes: current.nodes.map(node => {
         const level = levelMap.get(node.id) ?? 0
-        const index = (rowsByLevel.get(level) ?? []).findIndex(item => item.id === node.id)
+        const row = sortedRows.get(level) ?? []
+        const index = row.findIndex(item => item.id === node.id)
+        const count = Math.max(1, row.length)
         return {
           ...node,
           position: {
-            x: 120 + level * 320,
-            y: 100 + Math.max(0, index) * 180,
+            x: 100 + level * 360,
+            y: 240 + (Math.max(0, index) - (count - 1) / 2) * 190,
           },
         }
       }),
@@ -600,6 +612,7 @@ export function WorkflowBlueprintPage() {
                   {node.type === 'tool' && <p>{t('workflow.tool')}: {node.tool?.name}</p>}
                   {node.type === 'condition' && <p>{node.condition?.expression}</p>}
                   {node.type === 'prompt' && <p className="muted">{t('workflow.sourceOnly')}</p>}
+                  {node.type === 'output' && <p className="muted">工作流會在這裡產生最終結果。</p>}
                 </div>
               </div>
             ))}
@@ -897,6 +910,8 @@ function getNodeTypeLabel(type: BlueprintNodeType): string {
       return '\u689d\u4ef6'
     case 'merge':
       return '\u5408\u4f75'
+    case 'output':
+      return '\u8f38\u51fa'
     default:
       return type
   }
@@ -914,6 +929,8 @@ function getAddLabel(t: (key: string) => string, type: BlueprintNodeType) {
       return t('workflow.addCondition')
     case 'merge':
       return t('workflow.addMerge')
+    case 'output':
+      return t('workflow.addOutput')
     default:
       return type
   }
@@ -943,12 +960,22 @@ function getWorkflowBounds(nodes: BlueprintNode[]) {
   }
 }
 
+function getAverageParentY(node: BlueprintNode, nodes: BlueprintNode[]) {
+  if (!node.dependsOn.length) return node.position.y
+  const parentYs = node.dependsOn
+    .map(depId => nodes.find(item => item.id === depId)?.position.y)
+    .filter((value): value is number => typeof value === 'number')
+
+  if (parentYs.length === 0) return node.position.y
+  return parentYs.reduce((sum, value) => sum + value, 0) / parentYs.length
+}
+
 function canAcceptIncoming(type: BlueprintNodeType) {
   return type !== 'prompt'
 }
 
-function canEmitOutgoing(_type: BlueprintNodeType) {
-  return true
+function canEmitOutgoing(type: BlueprintNodeType) {
+  return type !== 'output'
 }
 
 function canConnectNodes(source: BlueprintNode, target: BlueprintNode) {

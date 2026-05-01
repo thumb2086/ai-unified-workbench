@@ -24,6 +24,7 @@ const NODE_COLORS: Record<NodeType, string> = {
   tool: '#f59e0b',
   condition: '#8b5cf6',
   merge: '#ec4899',
+  output: '#14b8a6',
 }
 
 const NODE_ICONS: Record<NodeType, string> = {
@@ -32,6 +33,7 @@ const NODE_ICONS: Record<NodeType, string> = {
   tool: '🔧',
   condition: '🔀',
   merge: '🔗',
+  output: 'OUT',
 }
 
 export function WorkflowVisualEditor({ 

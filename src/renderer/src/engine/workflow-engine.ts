@@ -301,6 +301,19 @@ export function createDefaultExecutors(aiNodes: AiNode[] = []): Partial<Record<N
       }
 
       return outputs
+    },
+
+    // Output nodes - expose the final dependency result as the workflow result
+    output: async (node, context) => {
+      const dependencies = node.dependsOn || []
+      if (dependencies.length === 0) return undefined
+      if (dependencies.length === 1) return context.getNodeOutput(dependencies[0])
+
+      const outputs: Record<string, unknown> = {}
+      for (const depId of dependencies) {
+        outputs[depId] = context.getNodeOutput(depId)
+      }
+      return outputs
     }
   }
 }

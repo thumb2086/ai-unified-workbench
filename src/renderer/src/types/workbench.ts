@@ -1,7 +1,7 @@
 export type Language = 'zh' | 'en'
 export type AiNodeKind = 'web' | 'api'
 export type AiProvider = 'chatgpt' | 'gemini' | 'claude' | 'grok' | string
-export type BlueprintNodeType = 'prompt' | 'agent' | 'tool' | 'condition' | 'merge'
+export type BlueprintNodeType = 'prompt' | 'agent' | 'tool' | 'condition' | 'merge' | 'output'
 export type ChatMode = 'broadcast' | 'relay' | 'debate' | 'subagent'
 
 export interface AiNode {
@@ -113,9 +113,45 @@ export function createDefaultWorkflows(): WorkflowBlueprint[] {
 export function mergeBuiltinWorkflows(workflows: WorkflowBlueprint[]): WorkflowBlueprint[] {
   const builtin = createDefaultWorkflows()
   const storedById = new Map(workflows.map(workflow => [workflow.id, workflow]))
-  const mergedBuiltin = builtin.map(workflow => storedById.get(workflow.id) ?? workflow)
+  const mergedBuiltin = builtin.map(workflow => {
+    const stored = storedById.get(workflow.id)
+    return stored ? ensureWorkflowHasOutput(stored) : workflow
+  })
   const custom = workflows.filter(workflow => !BUILTIN_WORKFLOW_IDS.has(workflow.id))
   return [...mergedBuiltin, ...custom]
+}
+
+function ensureWorkflowHasOutput(workflow: WorkflowBlueprint): WorkflowBlueprint {
+  if (workflow.nodes.some(node => node.type === 'output')) return workflow
+  if (workflow.nodes.length === 0) return workflow
+
+  const dependencyIds = new Set(workflow.nodes.flatMap(node => node.dependsOn))
+  const terminalNodes = workflow.nodes.filter(node => !dependencyIds.has(node.id))
+  const dependsOn = terminalNodes.length > 0
+    ? terminalNodes.map(node => node.id)
+    : [workflow.nodes[workflow.nodes.length - 1].id]
+  const maxX = Math.max(...workflow.nodes.map(node => node.position.x))
+  const avgY = Math.round(
+    dependsOn
+      .map(id => workflow.nodes.find(node => node.id === id)?.position.y ?? 160)
+      .reduce((sum, y) => sum + y, 0) / dependsOn.length,
+  )
+
+  return {
+    ...workflow,
+    nodes: [
+      ...workflow.nodes,
+      {
+        id: `${workflow.id}-output`,
+        type: 'output',
+        title: '\u6700\u7d42\u8f38\u51fa',
+        description: '\u5de5\u4f5c\u6d41\u7684\u7d50\u679c\u51fa\u53e3\u3002',
+        dependsOn,
+        outputVar: 'final_output',
+        position: { x: maxX + 360, y: avgY },
+      },
+    ],
+  }
 }
 
 function createSimplePromptChain(now: string): WorkflowBlueprint {
@@ -145,6 +181,15 @@ function createSimplePromptChain(now: string): WorkflowBlueprint {
         dependsOn: ['prompt-1'],
         outputVar: 'summary',
         position: { x: 460, y: 180 },
+      },
+      {
+        id: 'prompt-chain-output',
+        type: 'output',
+        title: '\u6700\u7d42\u8f38\u51fa',
+        description: '\u8f38\u51fa\u6458\u8981\u7d50\u679c\u3002',
+        dependsOn: ['agent-1'],
+        outputVar: 'final_output',
+        position: { x: 820, y: 180 },
       },
     ],
   }
@@ -207,6 +252,15 @@ function createBroadcastWorkflow(now: string): WorkflowBlueprint {
         outputVar: 'broadcast_summary',
         position: { x: 820, y: 220 },
       },
+      {
+        id: 'broadcast-output',
+        type: 'output',
+        title: '\u6700\u7d42\u8f38\u51fa',
+        description: '\u5448\u73fe\u5ee3\u64ad\u5f8c\u7684\u7d71\u6574\u7d50\u679c\u3002',
+        dependsOn: ['broadcast-merge'],
+        outputVar: 'final_output',
+        position: { x: 1180, y: 220 },
+      },
     ],
   }
 }
@@ -259,6 +313,15 @@ function createRelayWorkflow(now: string): WorkflowBlueprint {
         outputVar: 'relay_result',
         position: { x: 1060, y: 300 },
       },
+      {
+        id: 'relay-output',
+        type: 'output',
+        title: '\u6700\u7d42\u8f38\u51fa',
+        description: '\u63a5\u529b\u5b8c\u6210\u5f8c\u7684\u6700\u7d42\u7d50\u679c\u3002',
+        dependsOn: ['relay-3'],
+        outputVar: 'final_output',
+        position: { x: 1420, y: 300 },
+      },
     ],
   }
 }
@@ -310,6 +373,15 @@ function createDebateWorkflow(now: string): WorkflowBlueprint {
         outputVar: 'debate_summary',
         position: { x: 820, y: 220 },
       },
+      {
+        id: 'debate-output',
+        type: 'output',
+        title: '\u6700\u7d42\u8f38\u51fa',
+        description: '\u8f38\u51fa\u8faf\u8ad6\u5f8c\u7684\u7d50\u8ad6\u3002',
+        dependsOn: ['debate-merge'],
+        outputVar: 'final_output',
+        position: { x: 1180, y: 220 },
+      },
     ],
   }
 }
@@ -360,6 +432,15 @@ function createSubagentWorkflow(now: string): WorkflowBlueprint {
         dependsOn: ['subagent-master', 'subagent-worker'],
         outputVar: 'subagent_result',
         position: { x: 1120, y: 220 },
+      },
+      {
+        id: 'subagent-output',
+        type: 'output',
+        title: '\u6700\u7d42\u8f38\u51fa',
+        description: '\u8f38\u51fa\u4e3b\u4ee3\u7406\u8207\u5b50\u4ee3\u7406\u6574\u5408\u5f8c\u7684\u7d50\u679c\u3002',
+        dependsOn: ['subagent-merge'],
+        outputVar: 'final_output',
+        position: { x: 1480, y: 220 },
       },
     ],
   }

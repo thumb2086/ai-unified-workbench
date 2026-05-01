@@ -1,6 +1,6 @@
 // Workflow Engine Types
 
-export type NodeType = 'prompt' | 'agent' | 'tool' | 'condition' | 'merge'
+export type NodeType = 'prompt' | 'agent' | 'tool' | 'condition' | 'merge' | 'output'
 export type NodeStatus = 'pending' | 'running' | 'completed' | 'failed' | 'skipped'
 
 export interface WorkflowNode {
