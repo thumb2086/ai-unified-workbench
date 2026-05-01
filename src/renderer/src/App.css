@@ -276,6 +276,11 @@
   fill: none;
 }
 
+.connection-line.drafting {
+  stroke: rgba(34, 197, 94, 0.9);
+  stroke-dasharray: 8 6;
+}
+
 .workflow-node {
   position: absolute;
   width: 220px;
@@ -306,6 +311,13 @@
   flex-wrap: wrap;
 }
 
+.workflow-node-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: grab;
+}
+
 .workflow-node-title {
   font-weight: 800;
   font-size: 15px;
@@ -325,6 +337,32 @@
   justify-self: start;
   padding: 0.45rem 0.8rem;
   border-radius: 999px;
+}
+
+.port-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.port {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border-radius: 999px;
+  border: 2px solid rgba(148, 163, 184, 0.7);
+  background: rgba(15, 23, 42, 0.95);
+  box-shadow: 0 0 0 3px rgba(8, 11, 20, 0.82);
+}
+
+.port.out {
+  border-color: rgba(96, 165, 250, 0.95);
+  background: rgba(37, 99, 235, 0.95);
+}
+
+.port.in {
+  border-color: rgba(34, 197, 94, 0.95);
+  background: rgba(34, 197, 94, 0.95);
 }
 
 .canvas-empty {

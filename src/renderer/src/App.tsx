@@ -16,14 +16,21 @@ function isElectron() {
 export default function App() {
   const electronMode = isElectron()
   const { t } = useI18n()
-  const { activeAiNodeId, activeWorkflowId, activeChatThreadId } = useWorkbench()
+  const { aiNodes, workflows, chatThreads, activeAiNodeId, activeWorkflowId, activeChatThreadId } = useWorkbench()
   const [activeTab, setActiveTab] = useState<Tab>('nodes')
 
   const subtitle = useMemo(() => {
-    if (activeTab === 'nodes') return activeAiNodeId ? 'AI node selected' : t('nodes.subtitle')
-    if (activeTab === 'workflow') return activeWorkflowId ? 'Workflow selected' : t('workflow.subtitle')
-    return activeChatThreadId ? 'Chat thread selected' : t('chat.subtitle')
-  }, [activeTab, activeAiNodeId, activeWorkflowId, activeChatThreadId, t])
+    if (activeTab === 'nodes') {
+      const node = aiNodes.find(item => item.id === activeAiNodeId)
+      return node ? `${t('app.selection')}${node.name}` : t('nodes.subtitle')
+    }
+    if (activeTab === 'workflow') {
+      const workflow = workflows.find(item => item.id === activeWorkflowId)
+      return workflow ? `${t('app.selection')}${workflow.name}` : t('workflow.subtitle')
+    }
+    const thread = chatThreads.find(item => item.id === activeChatThreadId)
+    return thread ? `${t('app.selection')}${thread.topic || thread.id}` : t('chat.subtitle')
+  }, [activeTab, aiNodes, workflows, chatThreads, activeAiNodeId, activeWorkflowId, activeChatThreadId, t])
 
   if (!electronMode) {
     return (
@@ -32,7 +39,7 @@ export default function App() {
           <div>
             <div className="eyebrow">{t('app.title')}</div>
             <h1>{t('app.title')}</h1>
-            <p className="subtitle">Please run with Electron for full functionality.</p>
+            <p className="subtitle">請在 Electron 中執行以使用完整功能。</p>
           </div>
         </header>
       </div>

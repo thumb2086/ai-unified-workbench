@@ -91,44 +91,7 @@ export interface WorkbenchState {
 }
 
 export function createDefaultAiNodes(): AiNode[] {
-  const now = new Date().toISOString()
-  return [
-    {
-      id: 'chatgpt',
-      name: 'ChatGPT',
-      kind: 'web',
-      provider: 'chatgpt',
-      enabled: true,
-      webUrl: 'https://chatgpt.com/',
-      sessionId: '',
-      createdAt: now,
-      updatedAt: now,
-    },
-    {
-      id: 'gemini',
-      name: 'Gemini',
-      kind: 'web',
-      provider: 'gemini',
-      enabled: true,
-      webUrl: 'https://gemini.google.com/app',
-      sessionId: '',
-      createdAt: now,
-      updatedAt: now,
-    },
-    {
-      id: 'claude',
-      name: 'Claude API',
-      kind: 'api',
-      provider: 'claude',
-      enabled: true,
-      apiFormat: 'anthropic',
-      baseUrl: 'https://api.anthropic.com/v1',
-      model: 'claude-3-5-sonnet-latest',
-      conversationKey: 'claude',
-      createdAt: now,
-      updatedAt: now,
-    },
-  ]
+  return []
 }
 
 export function createDefaultWorkflows(): WorkflowBlueprint[] {
@@ -136,8 +99,8 @@ export function createDefaultWorkflows(): WorkflowBlueprint[] {
   return [
     {
       id: 'simple-prompt-chain',
-      name: 'Simple Prompt Chain',
-      description: 'A simple prompt to agent chain',
+      name: '簡單提示鏈',
+      description: '簡單的提示詞到代理人流程',
       version: '1.0',
       entryPoint: 'prompt-1',
       updatedAt: now,
@@ -145,8 +108,8 @@ export function createDefaultWorkflows(): WorkflowBlueprint[] {
         {
           id: 'prompt-1',
           type: 'prompt',
-          title: 'Prompt',
-          prompt: 'Write a short story about AI',
+          title: '提示詞',
+          prompt: '請寫一個關於 AI 的短篇故事',
           dependsOn: [],
           outputVar: 'story',
           position: { x: 80, y: 120 },
@@ -154,9 +117,8 @@ export function createDefaultWorkflows(): WorkflowBlueprint[] {
         {
           id: 'agent-1',
           type: 'agent',
-          title: 'Agent',
-          aiNodeId: 'chatgpt',
-          prompt: 'Summarize this story: {{story}}',
+          title: '代理人',
+          prompt: '請總結這個故事：{{story}}',
           dependsOn: ['prompt-1'],
           outputVar: 'summary',
           position: { x: 360, y: 120 },
@@ -165,8 +127,8 @@ export function createDefaultWorkflows(): WorkflowBlueprint[] {
     },
     {
       id: 'multi-agent-debate',
-      name: 'Multi-Agent Debate',
-      description: 'A debate between multiple AI nodes',
+      name: '多代理人辯論',
+      description: '多個 AI 節點進行辯論',
       version: '1.0',
       entryPoint: 'topic',
       updatedAt: now,
@@ -174,8 +136,8 @@ export function createDefaultWorkflows(): WorkflowBlueprint[] {
         {
           id: 'topic',
           type: 'prompt',
-          title: 'Topic',
-          prompt: 'What are the ethical implications of AI?',
+          title: '主題',
+          prompt: 'AI 的倫理影響是什麼？',
           dependsOn: [],
           outputVar: 'topic',
           position: { x: 80, y: 120 },
@@ -183,9 +145,8 @@ export function createDefaultWorkflows(): WorkflowBlueprint[] {
         {
           id: 'proponent',
           type: 'agent',
-          title: 'Proponent',
-          aiNodeId: 'gemini',
-          prompt: 'Argue FOR this topic: {{topic}}',
+          title: '正方',
+          prompt: '請支持這個主題：{{topic}}',
           dependsOn: ['topic'],
           outputVar: 'gemini_argument',
           position: { x: 360, y: 40 },
@@ -193,9 +154,8 @@ export function createDefaultWorkflows(): WorkflowBlueprint[] {
         {
           id: 'opponent',
           type: 'agent',
-          title: 'Opponent',
-          aiNodeId: 'chatgpt',
-          prompt: 'Argue AGAINST this topic: {{topic}}',
+          title: '反方',
+          prompt: '請反對這個主題：{{topic}}',
           dependsOn: ['topic'],
           outputVar: 'chatgpt_argument',
           position: { x: 360, y: 200 },
@@ -209,7 +169,7 @@ export function createEmptyWorkflow(): WorkflowBlueprint {
   const now = new Date().toISOString()
   return {
     id: `workflow-${Date.now()}`,
-    name: 'Untitled Workflow',
+    name: '未命名工作流',
     description: '',
     version: '1.0',
     entryPoint: '',
@@ -223,11 +183,10 @@ export function createEmptyAiNode(kind: AiNodeKind = 'web'): AiNode {
   const id = `ai-${Date.now()}`
   return {
     id,
-    name: kind === 'web' ? 'New Web AI' : 'New API AI',
+    name: kind === 'web' ? '新的 Web 節點' : '新的 API 節點',
     kind,
     provider: kind === 'web' ? 'chatgpt' : 'openai',
     enabled: true,
-    webUrl: kind === 'web' ? 'https://chatgpt.com/' : undefined,
     apiFormat: kind === 'api' ? 'openai' : undefined,
     baseUrl: kind === 'api' ? 'https://api.openai.com/v1' : undefined,
     model: kind === 'api' ? 'gpt-4o' : undefined,

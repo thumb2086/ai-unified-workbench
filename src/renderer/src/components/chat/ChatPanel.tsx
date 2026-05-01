@@ -42,11 +42,12 @@ export function ChatPanel() {
 
   useEffect(() => {
     if (!activeThread) return
+    setActiveChatThreadId(activeThread.id)
     setMode(activeThread.selection.mode)
     setSelectedIds(activeThread.selection.providerIds)
     setWorkflowId(activeThread.selection.workflowId ?? '')
     setPrompt(activeThread.prompt)
-  }, [activeThread])
+  }, [activeThread, setActiveChatThreadId, setMode, setSelectedIds, setWorkflowId, setPrompt])
 
   useEffect(() => {
     if (!workflowId && activeWorkflowId) {
@@ -337,7 +338,7 @@ export function ChatPanel() {
         <section className="results-section">
           <div className="panel-head">
             <h3>{t('chat.responsePanels')}</h3>
-            <span className="muted">{selectedNodes.length} selected</span>
+            <span className="muted">{t('common.selected')} {selectedNodes.length}</span>
           </div>
           <div className="response-grid">
             {selectedNodes.length === 0 ? (
@@ -376,8 +377,8 @@ export function ChatPanel() {
         {activeThread && (
           <section className="results-section">
             <div className="panel-head">
-              <h3>Session history</h3>
-              <span className="muted">{activeThread.messages.length} messages</span>
+              <h3>{t('chat.sessionHistory')}</h3>
+              <span className="muted">{t('chat.messages')} {activeThread.messages.length}</span>
             </div>
             <div className="history-list">
               {activeThread.messages.slice(-6).map(message => (

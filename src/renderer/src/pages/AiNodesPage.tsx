@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useWorkbench } from '../hooks/useWorkbenchState'
 import { useI18n } from '../hooks/useI18n'
 import type { AiNode } from '../types/workbench'
-import { createEmptyAiNode } from '../types/workbench'
+import { openBrowser } from '../services/api'
 
 const PROVIDER_OPTIONS = [
   { value: 'chatgpt', label: 'ChatGPT' },
@@ -61,6 +61,27 @@ export function AiNodesPage() {
     }
   }
 
+  const handleOpenWeb = async () => {
+    if (!activeNode || activeNode.kind !== 'web') return
+    const url = activeNode.webUrl || 'https://chatgpt.com/'
+    const result = await openBrowser(activeNode.provider, url, {
+      providerName: activeNode.name,
+      sessionId: activeNode.sessionId,
+    })
+
+    if (result.error) {
+      window.alert(result.error)
+      return
+    }
+
+    if (result.sessionId) {
+      handleUpdate({
+        sessionId: result.sessionId,
+        webUrl: url,
+      })
+    }
+  }
+
   return (
     <div className="page-grid nodes-page">
       <aside className="panel sidebar-panel">
@@ -106,7 +127,7 @@ export function AiNodesPage() {
             <div className="panel-head split">
               <div>
                 <h2>{activeNode.name}</h2>
-                <p className="muted">{activeNode.kind.toUpperCase()} · {activeNode.provider}</p>
+                <p className="muted">{t('common.type')}: {activeNode.kind.toUpperCase()} · {t('common.provider')}: {activeNode.provider}</p>
               </div>
               <div className="row">
                 <button onClick={() => duplicateAiNode(activeNode.id)}>{t('common.duplicate')}</button>
@@ -124,12 +145,14 @@ export function AiNodesPage() {
               </label>
 
               <label>
-                <span>{t('nodes.kind')}</span>
+                <span>{t('common.type')}</span>
                 <select
                   value={activeNode.kind}
                   onChange={event => handleUpdate({
                     kind: event.target.value as AiNode['kind'],
-                    webUrl: event.target.value === 'web' ? activeNode.webUrl || 'https://chatgpt.com/' : undefined,
+                    webUrl: event.target.value === 'web' ? activeNode.webUrl : undefined,
+                    sessionId: event.target.value === 'web' ? activeNode.sessionId : undefined,
+                    conversationKey: event.target.value === 'web' ? activeNode.conversationKey : undefined,
                     baseUrl: event.target.value === 'api' ? activeNode.baseUrl || 'https://api.openai.com/v1' : undefined,
                     apiFormat: event.target.value === 'api' ? activeNode.apiFormat || 'openai' : undefined,
                   })}
@@ -152,7 +175,7 @@ export function AiNodesPage() {
               </label>
 
               <label>
-                <span>Status</span>
+                <span>{t('common.status')}</span>
                 <select
                   value={activeNode.enabled ? 'enabled' : 'disabled'}
                   onChange={event => handleUpdate({ enabled: event.target.value === 'enabled' })}
@@ -174,11 +197,20 @@ export function AiNodesPage() {
 
             {activeNode.kind === 'web' ? (
               <div className="card stack">
-                <div className="section-title">{t('nodes.web')}</div>
+                <div className="section-title">{t('nodes.web')} · {t('nodes.webStatus')}</div>
+                <p className="muted">{t('nodes.openWebHint')}</p>
+                <div className="row">
+                  <span className={`pill ${activeNode.sessionId ? 'done' : 'idle'}`}>
+                    {activeNode.sessionId ? t('nodes.opened') : t('nodes.notOpened')}
+                  </span>
+                  <button className="primary" onClick={() => void handleOpenWeb()}>
+                    {activeNode.sessionId ? t('nodes.reopenWeb') : t('nodes.openNow')}
+                  </button>
+                </div>
                 <label>
                   <span>{t('nodes.webUrl')}</span>
                   <input
-                    value={activeNode.webUrl || ''}
+                    value={activeNode.webUrl || 'https://chatgpt.com/'}
                     onChange={event => handleUpdate({ webUrl: event.target.value })}
                     placeholder="https://chatgpt.com/"
                   />
