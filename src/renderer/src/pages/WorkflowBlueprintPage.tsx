@@ -828,7 +828,7 @@ export function WorkflowBlueprintPage() {
                   .map(node => {
                     const disabled = !canConnectNodes(node, selectedNode)
                     return (
-                      <label key={node.id} className={`checkbox-row ${disabled ? 'disabled' : ''}`}>
+                      <label key={node.id} className={`checkbox-row dependency-row ${disabled ? 'disabled' : ''}`}>
                         <input
                           type="checkbox"
                           checked={selectedNode.dependsOn.includes(node.id)}

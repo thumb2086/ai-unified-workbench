@@ -444,6 +444,27 @@
   gap: 10px;
 }
 
+.dependency-row {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-height: 34px;
+}
+
+.dependency-row input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  justify-self: center;
+}
+
+.dependency-row span {
+  min-width: 0;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
 .checkbox-copy {
   display: grid;
   gap: 4px;
