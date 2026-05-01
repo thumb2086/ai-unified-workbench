@@ -10,6 +10,9 @@ const translations: Record<Language, Dict> = {
   zh: {
     app: {
       title: '\u0041\u0049 \u7d71\u4e00\u5de5\u4f5c\u53f0',
+      web: '\u63a7\u5236\u7db2\u9801',
+      webSubtitle: '\u958b\u555f\u4e26\u5207\u63db\u53ef\u63a7\u5236\u7684 AI \u7db2\u9801 session',
+      webNodesReady: '\u500b Web \u7bc0\u9ede\u53ef\u7528',
       nodes: '\u0041\u0049 \u7bc0\u9ede',
       workflow: '\u5de5\u4f5c\u6d41\u85cd\u5716',
       chat: '\u804a\u5929 / \u57f7\u884c',
@@ -147,6 +150,9 @@ const translations: Record<Language, Dict> = {
   en: {
     app: {
       title: 'AI Unified Workbench',
+      web: 'Controlled Web',
+      webSubtitle: 'Open and switch controllable AI web sessions',
+      webNodesReady: 'Web nodes available',
       nodes: 'AI Nodes',
       workflow: 'Workflow Blueprint',
       chat: 'Chat / Run',

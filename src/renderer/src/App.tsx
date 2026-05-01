@@ -5,9 +5,10 @@ import { LanguageToggle } from './components/LanguageToggle'
 import { AiNodesPage } from './pages/AiNodesPage'
 import { WorkflowBlueprintPage } from './pages/WorkflowBlueprintPage'
 import { ChatPanel } from './components/chat/ChatPanel'
+import { WebviewPool } from './components/webview/WebviewPool'
 import './App.css'
 
-type Tab = 'nodes' | 'workflow' | 'chat'
+type Tab = 'web' | 'nodes' | 'workflow' | 'chat'
 
 function isElectron() {
   return typeof window !== 'undefined' && typeof window.aiWorkbench !== 'undefined'
@@ -17,9 +18,13 @@ export default function App() {
   const electronMode = isElectron()
   const { t } = useI18n()
   const { aiNodes, workflows, chatThreads, activeAiNodeId, activeWorkflowId, activeChatThreadId } = useWorkbench()
-  const [activeTab, setActiveTab] = useState<Tab>('nodes')
+  const [activeTab, setActiveTab] = useState<Tab>('web')
 
   const subtitle = useMemo(() => {
+    if (activeTab === 'web') {
+      const webNodes = aiNodes.filter(item => item.kind === 'web')
+      return webNodes.length > 0 ? `${webNodes.length} ${t('app.webNodesReady')}` : t('app.webSubtitle')
+    }
     if (activeTab === 'nodes') {
       const node = aiNodes.find(item => item.id === activeAiNodeId)
       return node ? `${t('app.selection')}${node.name}` : t('nodes.subtitle')
@@ -56,6 +61,9 @@ export default function App() {
         </div>
 
         <nav className="main-tabs">
+          <button className={activeTab === 'web' ? 'active' : ''} onClick={() => setActiveTab('web')}>
+            {t('app.web')}
+          </button>
           <button className={activeTab === 'nodes' ? 'active' : ''} onClick={() => setActiveTab('nodes')}>
             {t('app.nodes')}
           </button>
@@ -73,6 +81,7 @@ export default function App() {
       </header>
 
       <main className="app-main">
+        {activeTab === 'web' && <WebviewPool />}
         {activeTab === 'nodes' && <AiNodesPage />}
         {activeTab === 'workflow' && <WorkflowBlueprintPage />}
         {activeTab === 'chat' && <ChatPanel />}

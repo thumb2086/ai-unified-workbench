@@ -1,3 +1,155 @@
+.controlled-web-page {
+  height: calc(100vh - 130px);
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr);
+  gap: 16px;
+  color: #e5edf8;
+}
+
+.controlled-web-sidebar,
+.controlled-web-main {
+  min-width: 0;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(11, 16, 32, 0.9);
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.22);
+}
+
+.controlled-web-sidebar {
+  border-radius: 18px;
+  padding: 18px;
+  display: grid;
+  align-content: start;
+  gap: 16px;
+  overflow: auto;
+}
+
+.controlled-web-sidebar h2,
+.controlled-web-toolbar h3 {
+  margin: 0;
+}
+
+.provider-workspace-tabs {
+  display: grid;
+  gap: 10px;
+}
+
+.provider-workspace-tab {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 42px 1fr;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(15, 23, 42, 0.78);
+}
+
+.provider-workspace-tab.active {
+  border-color: rgba(96, 165, 250, 0.75);
+  background: rgba(37, 99, 235, 0.16);
+}
+
+.provider-workspace-tab small,
+.node-subtab small {
+  display: block;
+  margin-top: 4px;
+  color: #94a3b8;
+}
+
+.provider-mark {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: rgba(37, 99, 235, 0.16);
+  color: #bfdbfe;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.controlled-web-main {
+  border-radius: 18px;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.node-tab-strip {
+  display: flex;
+  gap: 10px;
+  padding: 16px 16px 0;
+  overflow-x: auto;
+}
+
+.node-subtab {
+  min-width: 220px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  text-align: left;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(15, 23, 42, 0.78);
+}
+
+.node-subtab.active {
+  border-color: rgba(96, 165, 250, 0.75);
+  background: rgba(37, 99, 235, 0.16);
+}
+
+.node-subtab.add {
+  min-width: 48px;
+  justify-content: center;
+  font-size: 22px;
+}
+
+.session-state {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: rgba(245, 158, 11, 0.16);
+  color: #fcd34d;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.session-state.ready {
+  background: rgba(34, 197, 94, 0.16);
+  color: #86efac;
+}
+
+.session-state.loading,
+.session-state.busy {
+  background: rgba(59, 130, 246, 0.16);
+  color: #93c5fd;
+}
+
+.session-state.error {
+  background: rgba(239, 68, 68, 0.16);
+  color: #fca5a5;
+}
+
+.controlled-web-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 16px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.controlled-web-content {
+  min-height: 0;
+  overflow: auto;
+  padding: 16px;
+}
+
 .webview-pool {
   display: flex;
   flex-direction: column;
@@ -316,6 +468,19 @@
 
 /* Responsive */
 @media (max-width: 768px) {
+  .controlled-web-page {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+
+  .controlled-web-main {
+    min-height: 640px;
+  }
+
+  .controlled-web-toolbar {
+    display: grid;
+  }
+
   .tab {
     min-width: 100px;
     max-width: 160px;
