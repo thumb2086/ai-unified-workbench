@@ -670,7 +670,34 @@ const ALLOWED_PATHS = [
 
 function isPathAllowed(targetPath: string): boolean {
   const resolved = path.resolve(targetPath)
-  return ALLOWED_PATHS.some(allowed => resolved.startsWith(allowed))
+  return ALLOWED_PATHS.some(allowed => isPathInside(resolved, allowed))
+}
+
+function isPathInside(targetPath: string, parentPath: string): boolean {
+  const resolvedTarget = path.resolve(targetPath)
+  const resolvedParent = path.resolve(parentPath)
+  const relative = path.relative(resolvedParent, resolvedTarget)
+  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative))
+}
+
+function isWorkflowNameAllowed(name: string): boolean {
+  return /^[A-Za-z0-9_-]+$/.test(name)
+}
+
+function resolveWorkflowPath(name: string): string {
+  if (!isWorkflowNameAllowed(name)) {
+    throw new Error('Invalid workflow name')
+  }
+
+  const filePath = path.resolve(WORKFLOWS_DIR, `${name}.yaml`)
+  if (!isPathInside(filePath, WORKFLOWS_DIR)) {
+    throw new Error('Workflow path escapes workflows directory')
+  }
+  return filePath
+}
+
+function hasShellMetacharacters(command: string): boolean {
+  return /[;&|`$<>\\\n\r*?()[\]{}!]/.test(command)
 }
 
 async function handleFsRead(
@@ -745,7 +772,11 @@ async function handleShell(
 ): Promise<ToolResult> {
   // SECURITY: Limit allowed commands
   const ALLOWED_COMMANDS = ['git', 'npm', 'node', 'ls', 'cat', 'echo', 'mkdir', 'cd']
-  const cmdPrefix = command.split(' ')[0]
+  if (hasShellMetacharacters(command)) {
+    return { success: false, error: 'Shell metacharacters are not allowed' }
+  }
+
+  const cmdPrefix = command.trim().split(/\s+/)[0]
 
   if (!ALLOWED_COMMANDS.includes(cmdPrefix)) {
     return { success: false, error: `Command '${cmdPrefix}' not allowed` }
@@ -805,10 +836,7 @@ async function handleLoadWorkflow(
   name: string
 ): Promise<ToolResult> {
   try {
-    const filePath = path.join(WORKFLOWS_DIR, `${name}.yaml`)
-    if (!isPathAllowed(filePath)) {
-      return { success: false, error: 'Path not allowed' }
-    }
+    const filePath = resolveWorkflowPath(name)
     const content = await fs.readFile(filePath, 'utf-8')
     return { success: true, data: content }
   } catch (error) {
@@ -830,7 +858,7 @@ async function handleSaveWorkflow(
 ): Promise<ToolResult> {
   try {
     await fs.mkdir(WORKFLOWS_DIR, { recursive: true })
-    const filePath = path.join(WORKFLOWS_DIR, `${payload.name}.yaml`)
+    const filePath = resolveWorkflowPath(payload.name)
     await fs.writeFile(filePath, payload.content, 'utf-8')
     return { success: true }
   } catch (error) {

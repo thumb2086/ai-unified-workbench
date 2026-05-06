@@ -165,7 +165,7 @@ export class ExecutionContext {
  * Template engine for variable substitution
  */
 export function renderTemplate(template: string, context: ExecutionContext): string {
-  return template.replace(/\{\{(\s*[\w.]+\s*)\}\}/g, (match, key) => {
+  return template.replace(/\{\{(\s*[\w.-]+\s*)\}\}/g, (match, key) => {
     const trimmed = key.trim()
     
     // Check if it's a node output reference (e.g., "node-1.output")

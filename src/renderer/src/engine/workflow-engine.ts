@@ -137,6 +137,9 @@ export class WorkflowEngine {
 
       // Store output
       context.setNodeOutput(node.id, result)
+      if (node.outputVar) {
+        context.setVariable(node.outputVar, result)
+      }
       context.setNodeStatus(node.id, 'completed')
       this.config.onNodeComplete?.(node.id, result)
 

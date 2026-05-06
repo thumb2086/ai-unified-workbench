@@ -23,6 +23,11 @@ export function parseWorkflow(definition: WorkflowDefinition): ParsedWorkflow {
   // Build dependency graph
   for (const node of definition.nodes) {
     const deps = new Set(node.dependsOn || [])
+    for (const depId of deps) {
+      if (!nodes.has(depId)) {
+        throw new Error(`Node '${node.id}' has unknown dependency '${depId}'`)
+      }
+    }
     dependencies.set(node.id, deps)
 
     // Track reverse dependencies

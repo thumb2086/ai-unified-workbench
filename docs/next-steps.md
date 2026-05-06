@@ -1,7 +1,6 @@
 # 下一步
 
-1. 先把 Vite 網頁版跑起來
-2. 驗證三欄式 UI
-3. 補按鈕互動與任務狀態
-4. 接 SQLite
-5. 再把 Electron 桌面殼打開
+1. Workflow 測試與除錯
+2. IPC 安全性強化（Electron contextIsolation、preload 沙盒）
+3. CI/CD 流程建置（GitHub Actions）
+4. 打包與發布（electron-builder）

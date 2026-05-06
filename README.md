@@ -18,23 +18,49 @@
 
 ## 啟動方式
 
-### 僅前端（手動模式）
 ```bash
 npm install
-npm run dev
 ```
 
-### 前後端一起（含 API 自動化）
+### 網頁版（Vite 開發伺服器）
 ```bash
-npm install
-npm run server  # 終端機 1：啟動後端 (port 3001)
-npm run dev     # 終端機 2：啟動前端 (port 5173)
+npm run dev
+```
+- 前端：http://localhost:5173
+
+### Electron 桌面版
+```bash
+npm run dev:electron
+```
+- 同時啟動 Vite 開發伺服器 + Electron 視窗
+- 注意：開發模式下 Node API 可直接暴露給渲染程序，生產環境需注意安全設定
+
+### 前後端分離（含 API 自動化）
+終端機 1：
+```bash
+npm run server  # 後端 (port 3001)
+```
+終端機 2：
+```bash
+npm run dev     # 前端 (port 5173)
 ```
 
 或使用 concurrently（同時啟動）：
 ```bash
 npm run dev:full
 ```
+
+## 指令總覽
+
+| 指令 | 說明 |
+|------|------|
+| `npm run dev` | Vite 開發伺服器 |
+| `npm run dev:electron` | Vite + Electron |
+| `npm run server` | 後端 API 伺服器 |
+| `npm run dev:full` | 前後端同時啟動 |
+| `npm run typecheck` | 類型檢查 |
+| `npm run test` | 執行測試 |
+| `npm run build` | 建置前端 + Electron |
 
 ## 主要功能
 - **Provider 管理**：自訂 API 網址、API Key、模型名稱
