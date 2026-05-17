@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { AiNode } from '../../types/workbench'
+import { useI18n } from '../../hooks/useI18n'
 import { useWorkbench } from '../../hooks/useWorkbenchState'
 import {
   BrowserSessionRecord,
@@ -26,6 +27,7 @@ type ProviderGroup = {
 }
 
 export function WebviewPool() {
+  const { t } = useI18n()
   const { aiNodes, activeAiNodeId, setActiveAiNodeId, updateAiNode, addAiNode } = useWorkbench()
   const webNodes = useMemo(() => aiNodes.filter(node => node.kind === 'web'), [aiNodes])
   const groups = useMemo(() => groupWebNodes(webNodes), [webNodes])
@@ -101,7 +103,7 @@ export function WebviewPool() {
     })
 
     if (result.error || !result.sessionId) {
-      window.alert(result.error || 'Failed to open browser session')
+      window.alert(result.error || t('webControl.openFailed'))
       return null
     }
 
@@ -206,11 +208,12 @@ export function WebviewPool() {
       <div className="controlled-web-sidebar">
         <div>
           <h2>Browser Control</h2>
-          <p className="muted">Puppeteer-backed sessions open in a dedicated Chrome profile outside the app.</p>
+          <h2>{t('webControl.title')}</h2>
+          <p className="muted">{t('webControl.subtitle')}</p>
         </div>
 
-        <button className="primary" onClick={createWebNode}>Create Web Node</button>
-        <button onClick={() => void refreshRemoteSessions()}>Refresh Sessions</button>
+        <button className="primary" onClick={createWebNode}>{t('webControl.createNode')}</button>
+        <button onClick={() => void refreshRemoteSessions()}>{t('webControl.refreshSessions')}</button>
 
         <div className="provider-workspace-tabs" role="tablist" aria-label="Web providers">
           {groups.map(group => (
@@ -236,8 +239,8 @@ export function WebviewPool() {
       <div className="controlled-web-main">
         {!selectedGroup || !selectedNode ? (
           <div className="empty-state">
-            <p>No web node selected.</p>
-            <p>Create one to open a controlled browser session.</p>
+            <p>{t('webControl.noNode')}</p>
+            <p>{t('webControl.noNodeHint')}</p>
           </div>
         ) : (
           <>
@@ -272,19 +275,19 @@ export function WebviewPool() {
               </div>
               <div className="row">
                 <button onClick={() => void handleOpenSession(false)} disabled={busySessionId === (selectedNode.sessionId || selectedNode.id)}>
-                  {selectedNode.sessionId ? 'Focus Session' : 'Open Session'}
+                  {selectedNode.sessionId ? t('webControl.focusSession') : t('webControl.openSession')}
                 </button>
-                <button onClick={() => void handleOpenSession(true)}>New Session</button>
-                <button onClick={() => void handleReadResponse()} disabled={!selectedNode.sessionId}>Read Response</button>
-                <button onClick={() => void handleCloseSession()} disabled={!selectedNode.sessionId}>Close</button>
-                <button className="danger" onClick={() => void handleClearSession()} disabled={!selectedNode.sessionId}>Clear Profile</button>
+                <button onClick={() => void handleOpenSession(true)}>{t('webControl.newSession')}</button>
+                <button onClick={() => void handleReadResponse()} disabled={!selectedNode.sessionId}>{t('webControl.readResponse')}</button>
+                <button onClick={() => void handleCloseSession()} disabled={!selectedNode.sessionId}>{t('webControl.closeSession')}</button>
+                <button className="danger" onClick={() => void handleClearSession()} disabled={!selectedNode.sessionId}>{t('webControl.clearProfile')}</button>
               </div>
             </div>
 
             <div className="controlled-web-content" style={{ display: 'grid', gap: 16 }}>
               <div className="card stack">
                 <div className="panel-head">
-                  <strong>Session Info</strong>
+                  <strong>{t('webControl.sessionInfo')}</strong>
                 </div>
                 <div className="form-grid">
                   <label>
@@ -292,7 +295,7 @@ export function WebviewPool() {
                     <input value={selectedNode.sessionId || ''} readOnly />
                   </label>
                   <label>
-                    <span>Account Label</span>
+                    <span>{t('webControl.accountLabel')}</span>
                     <input
                       value={selectedNode.accountLabel || ''}
                       onChange={event => updateAiNode(selectedNode.id, current => ({
@@ -303,7 +306,7 @@ export function WebviewPool() {
                     />
                   </label>
                   <label>
-                    <span>Account Key</span>
+                    <span>{t('webControl.accountKey')}</span>
                     <input
                       value={selectedNode.accountKey || ''}
                       onChange={event => updateAiNode(selectedNode.id, current => ({
@@ -329,35 +332,35 @@ export function WebviewPool() {
 
               <div className="card stack">
                 <div className="panel-head">
-                  <strong>Prompt Console</strong>
+                  <strong>{t('webControl.promptConsole')}</strong>
                 </div>
                 <textarea
                   value={promptDraft}
                   onChange={event => setPromptDraft(event.target.value)}
-                  placeholder="Type a prompt to send through the controlled browser session."
+                  placeholder={t('webControl.promptPlaceholder')}
                   style={{ minHeight: 140 }}
                 />
                 <div className="row">
                   <button className="primary" onClick={() => void handleSendPrompt()} disabled={!promptDraft.trim()}>
-                    Send Prompt
+                    {t('webControl.sendPrompt')}
                   </button>
                 </div>
               </div>
 
               <div className="card stack">
                 <div className="panel-head">
-                  <strong>Latest Response</strong>
+                  <strong>{t('webControl.latestResponse')}</strong>
                 </div>
-                <pre style={{ whiteSpace: 'pre-wrap', minHeight: 180 }}>{responseText || 'No response captured yet.'}</pre>
+                <pre style={{ whiteSpace: 'pre-wrap', minHeight: 180 }}>{responseText || t('webControl.noResponse')}</pre>
               </div>
 
               <div className="card stack">
                 <div className="panel-head">
-                  <strong>Known Sessions</strong>
+                  <strong>{t('webControl.knownSessions')}</strong>
                 </div>
                 <div className="workflow-list">
                   {sessions.length === 0 ? (
-                    <p className="muted">No browser sessions recorded yet.</p>
+                    <p className="muted">{t('webControl.noSessions')}</p>
                   ) : sessions.map(session => (
                     <div key={session.sessionId} className="workflow-list-item">
                       <strong>{session.providerName}</strong>

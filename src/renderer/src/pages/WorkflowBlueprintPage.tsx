@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { dump as toYaml } from 'js-yaml'
 import { executeWorkflow } from '../engine/workflow-engine'
+import { useI18n } from '../hooks/useI18n'
 import { useWorkbench } from '../hooks/useWorkbenchState'
 import {
   BlueprintNodeType,
@@ -26,6 +27,7 @@ const TEMPLATE_OPTIONS: Array<{ value: BlueprintTemplateId; label: string }> = [
 const STEP_TYPE_OPTIONS: BlueprintNodeType[] = ['prompt', 'agent', 'tool', 'condition', 'merge', 'output']
 
 export function WorkflowBlueprintPage() {
+  const { t, lang } = useI18n()
   const {
     workflows,
     aiNodes,
@@ -143,32 +145,37 @@ export function WorkflowBlueprintPage() {
       : toYaml(previewDefinition, { noRefs: true })
     : ''
 
+  const localizedTemplates = TEMPLATE_OPTIONS.map(option => ({
+    ...option,
+    label: localizeTemplateLabel(option.value, lang),
+  }))
+
   return (
     <div className="page-grid workflow-page">
       <aside className="panel sidebar-panel">
         <div className="panel-head">
           <div>
-            <h2>Blueprints</h2>
-            <p className="muted">Form-first workflow builder with preview and direct run support.</p>
+            <h2>{t('workflow.title')}</h2>
+            <p className="muted">{t('workflow.formSubtitle')}</p>
           </div>
         </div>
 
         <div className="stack">
-          <button className="primary" onClick={handleCreateWorkflow}>Create Blueprint</button>
+          <button className="primary" onClick={handleCreateWorkflow}>{t('workflow.createBlueprint')}</button>
           {workflow && (
             <button
               className="danger"
               onClick={() => {
-                if (window.confirm(`Delete "${workflow.name}"?`)) {
+                if (window.confirm(`${t('workflow.deleteConfirmPrefix')} "${workflow.name}"?`)) {
                   deleteWorkflow(workflow.id)
                 }
               }}
             >
-              Delete Blueprint
+              {t('workflow.deleteBlueprint')}
             </button>
           )}
           <button className="primary" onClick={() => void handleRunWorkflow()} disabled={!workflow}>
-            {runState === 'running' ? 'Running...' : 'Run Blueprint'}
+            {runState === 'running' ? t('workflow.runningBlueprint') : t('workflow.runBlueprint')}
           </button>
         </div>
 
@@ -183,7 +190,7 @@ export function WorkflowBlueprintPage() {
               }}
             >
               <strong>{item.name}</strong>
-              <span className="muted">{item.steps.length} steps</span>
+              <span className="muted">{item.steps.length} {t('workflow.steps')}</span>
             </button>
           ))}
         </div>
@@ -192,61 +199,61 @@ export function WorkflowBlueprintPage() {
       <section className="panel canvas-panel">
         {!workflow ? (
           <div className="empty-state">
-            <h3>No blueprint selected</h3>
-            <p>Create a blueprint to start editing.</p>
+            <h3>{t('workflow.noBlueprint')}</h3>
+            <p>{t('workflow.createBlueprintHint')}</p>
           </div>
         ) : (
           <div className="stack">
             <div className="panel-head split">
               <div>
                 <h2>{workflow.name}</h2>
-                <p className="muted">Author by steps, then inspect the generated workflow definition.</p>
+                <p className="muted">{t('workflow.authorHint')}</p>
               </div>
               <div className="row">
-                <button onClick={() => setPreviewMode('json')} className={previewMode === 'json' ? 'primary' : ''}>JSON</button>
-                <button onClick={() => setPreviewMode('yaml')} className={previewMode === 'yaml' ? 'primary' : ''}>YAML</button>
+                <button onClick={() => setPreviewMode('json')} className={previewMode === 'json' ? 'primary' : ''}>{t('workflow.previewJson')}</button>
+                <button onClick={() => setPreviewMode('yaml')} className={previewMode === 'yaml' ? 'primary' : ''}>{t('workflow.previewYaml')}</button>
               </div>
             </div>
 
             <div className="card form-grid">
               <label>
-                <span>Name</span>
+                <span>{t('workflow.name')}</span>
                 <input
                   value={workflow.name}
                   onChange={event => updateCurrentWorkflow(current => ({ ...current, name: event.target.value }))}
                 />
               </label>
               <label>
-                <span>Template</span>
+                <span>{t('workflow.template')}</span>
                 <select
                   value={workflow.templateId}
                   onChange={event => handleTemplateChange(event.target.value as BlueprintTemplateId)}
                 >
-                  {TEMPLATE_OPTIONS.map(option => (
+                  {localizedTemplates.map(option => (
                     <option key={option.value} value={option.value}>{option.label}</option>
                   ))}
                 </select>
               </label>
               <label>
-                <span>Description</span>
+                <span>{t('workflow.description')}</span>
                 <input
                   value={workflow.description || ''}
                   onChange={event => updateCurrentWorkflow(current => ({ ...current, description: event.target.value }))}
                 />
               </label>
               <label>
-                <span>Editor Mode</span>
+                <span>{t('workflow.editorMode')}</span>
                 <input value={workflow.editorMode} disabled />
               </label>
             </div>
 
             <div className="card stack">
               <div className="panel-head split">
-                <strong>Blueprint Steps</strong>
+                <strong>{t('workflow.blueprintSteps')}</strong>
                 <div className="row">
                   {STEP_TYPE_OPTIONS.map(type => (
                     <button key={type} onClick={() => handleAddStep(type)}>
-                      Add {type}
+                      {t('workflow.addStep')} {type}
                     </button>
                   ))}
                 </div>
@@ -268,7 +275,7 @@ export function WorkflowBlueprintPage() {
 
             <div className="card stack">
               <div className="panel-head split">
-                <strong>Generated Preview</strong>
+                <strong>{t('workflow.generatedPreview')}</strong>
                 <span className="pill subtle">{previewMode.toUpperCase()}</span>
               </div>
               <pre style={{ whiteSpace: 'pre-wrap', maxHeight: 320, overflow: 'auto' }}>{previewText}</pre>
@@ -277,7 +284,7 @@ export function WorkflowBlueprintPage() {
             {runOutput && (
               <div className={`run-result ${runState}`}>
                 <div className="panel-head">
-                  <strong>Execution Result</strong>
+                  <strong>{t('workflow.executionResult')}</strong>
                   <span className={`pill ${runState}`}>{runState}</span>
                 </div>
                 <pre>{runOutput}</pre>
@@ -290,25 +297,25 @@ export function WorkflowBlueprintPage() {
       <aside className="panel inspector-panel">
         {!workflow || !selectedStep ? (
           <div className="empty-state">
-            <h3>No step selected</h3>
-            <p>Select a step to edit its configuration.</p>
+            <h3>{t('workflow.noStep')}</h3>
+            <p>{t('workflow.noStepHint')}</p>
           </div>
         ) : (
           <div className="stack inspector-form">
             <div className="panel-head split">
               <div>
-                <h2>Step Inspector</h2>
+                <h2>{t('workflow.stepInspector')}</h2>
                 <p className="muted">{selectedStep.id}</p>
               </div>
               <div className="row">
-                <button onClick={() => handleStepMove(selectedStep.id, -1)}>Up</button>
-                <button onClick={() => handleStepMove(selectedStep.id, 1)}>Down</button>
-                <button className="danger" onClick={() => handleDeleteStep(selectedStep.id)}>Delete</button>
+                <button onClick={() => handleStepMove(selectedStep.id, -1)}>{t('workflow.moveUp')}</button>
+                <button onClick={() => handleStepMove(selectedStep.id, 1)}>{t('workflow.moveDown')}</button>
+                <button className="danger" onClick={() => handleDeleteStep(selectedStep.id)}>{t('common.delete')}</button>
               </div>
             </div>
 
             <label>
-              <span>Title</span>
+              <span>{t('workflow.titleLabel')}</span>
               <input
                 value={selectedStep.title}
                 onChange={event => handleStepPatch(selectedStep.id, { title: event.target.value })}
@@ -316,7 +323,7 @@ export function WorkflowBlueprintPage() {
             </label>
 
             <label>
-              <span>Type</span>
+              <span>{t('common.type')}</span>
               <select
                 value={selectedStep.type}
                 onChange={event => handleStepPatch(selectedStep.id, resetStepType(selectedStep, event.target.value as BlueprintNodeType))}
@@ -328,7 +335,7 @@ export function WorkflowBlueprintPage() {
             </label>
 
             <label>
-              <span>Description</span>
+              <span>{t('workflow.description')}</span>
               <textarea
                 value={selectedStep.description || ''}
                 onChange={event => handleStepPatch(selectedStep.id, { description: event.target.value })}
@@ -336,7 +343,7 @@ export function WorkflowBlueprintPage() {
             </label>
 
             <label>
-              <span>Output Variable</span>
+              <span>{t('workflow.outputVar')}</span>
               <input
                 value={selectedStep.outputVar || ''}
                 onChange={event => handleStepPatch(selectedStep.id, { outputVar: event.target.value })}
@@ -346,7 +353,7 @@ export function WorkflowBlueprintPage() {
 
             {(selectedStep.type === 'prompt' || selectedStep.type === 'agent') && (
               <label>
-                <span>Prompt</span>
+                <span>{t('workflow.prompt')}</span>
                 <textarea
                   value={selectedStep.prompt || ''}
                   onChange={event => handleStepPatch(selectedStep.id, { prompt: event.target.value })}
@@ -357,7 +364,7 @@ export function WorkflowBlueprintPage() {
             {selectedStep.type === 'agent' && (
               <>
                 <label>
-                  <span>AI Node</span>
+                  <span>{t('workflow.aiNode')}</span>
                   <select
                     value={selectedStep.aiNodeId || ''}
                     onChange={event => {
@@ -368,7 +375,7 @@ export function WorkflowBlueprintPage() {
                       })
                     }}
                   >
-                    <option value="">-- Select --</option>
+                    <option value="">{t('workflow.selectPlaceholder')}</option>
                     {aiNodes.map(node => (
                       <option key={node.id} value={node.id}>
                         {node.name} ({node.kind})
@@ -377,7 +384,7 @@ export function WorkflowBlueprintPage() {
                   </select>
                 </label>
                 <label>
-                  <span>Provider Override</span>
+                  <span>{t('workflow.providerOverride')}</span>
                   <input
                     value={selectedStep.provider || ''}
                     onChange={event => handleStepPatch(selectedStep.id, { provider: event.target.value })}
@@ -390,7 +397,7 @@ export function WorkflowBlueprintPage() {
             {selectedStep.type === 'tool' && (
               <>
                 <label>
-                  <span>Tool</span>
+                  <span>{t('workflow.tool')}</span>
                   <select
                     value={selectedStep.tool?.name || 'fsRead'}
                     onChange={event => handleStepPatch(selectedStep.id, {
@@ -409,7 +416,7 @@ export function WorkflowBlueprintPage() {
                   </select>
                 </label>
                 <label>
-                  <span>Tool Params (JSON)</span>
+                  <span>{t('workflow.toolParamsJson')}</span>
                   <textarea
                     value={JSON.stringify(selectedStep.tool?.params || {}, null, 2)}
                     onChange={event => {
@@ -433,7 +440,7 @@ export function WorkflowBlueprintPage() {
             {selectedStep.type === 'condition' && (
               <>
                 <label>
-                  <span>Expression</span>
+                  <span>{t('workflow.expression')}</span>
                   <textarea
                     value={selectedStep.condition?.expression || ''}
                     onChange={event => handleStepPatch(selectedStep.id, {
@@ -446,7 +453,7 @@ export function WorkflowBlueprintPage() {
                   />
                 </label>
                 <label>
-                  <span>True Branch</span>
+                  <span>{t('workflow.trueBranch')}</span>
                   <select
                     value={selectedStep.condition?.trueBranch || ''}
                     onChange={event => handleStepPatch(selectedStep.id, {
@@ -457,14 +464,14 @@ export function WorkflowBlueprintPage() {
                       },
                     })}
                   >
-                    <option value="">-- Select --</option>
+                    <option value="">{t('workflow.selectPlaceholder')}</option>
                     {workflow.steps.filter(step => step.id !== selectedStep.id).map(step => (
                       <option key={step.id} value={step.id}>{step.title}</option>
                     ))}
                   </select>
                 </label>
                 <label>
-                  <span>False Branch</span>
+                  <span>{t('workflow.falseBranch')}</span>
                   <select
                     value={selectedStep.condition?.falseBranch || ''}
                     onChange={event => handleStepPatch(selectedStep.id, {
@@ -475,7 +482,7 @@ export function WorkflowBlueprintPage() {
                       },
                     })}
                   >
-                    <option value="">-- Select --</option>
+                    <option value="">{t('workflow.selectPlaceholder')}</option>
                     {workflow.steps.filter(step => step.id !== selectedStep.id).map(step => (
                       <option key={step.id} value={step.id}>{step.title}</option>
                     ))}
@@ -485,7 +492,7 @@ export function WorkflowBlueprintPage() {
             )}
 
             <div className="card stack">
-              <div className="section-title">Dependencies</div>
+              <div className="section-title">{t('workflow.dependenciesTitle')}</div>
               {workflow.steps
                 .filter(step => step.id !== selectedStep.id)
                 .map(step => (
@@ -534,7 +541,7 @@ function createStep(type: BlueprintNodeType, dependencyId?: string): BlueprintSt
     id,
     type,
     title: defaultTitleForType(type),
-    prompt: type === 'prompt' || type === 'agent' ? 'Describe the task here.' : undefined,
+    prompt: type === 'prompt' || type === 'agent' ? '請在這裡描述任務。' : undefined,
     dependsOn: dependencyId ? [dependencyId] : [],
     outputVar: type === 'output' ? 'final_output' : type === 'prompt' ? 'value' : undefined,
     tool: type === 'tool'
@@ -556,7 +563,7 @@ function createStep(type: BlueprintNodeType, dependencyId?: string): BlueprintSt
 function resetStepType(step: BlueprintStep, type: BlueprintNodeType): Partial<BlueprintStep> {
   return {
     type,
-    prompt: type === 'prompt' || type === 'agent' ? step.prompt || 'Describe the task here.' : undefined,
+    prompt: type === 'prompt' || type === 'agent' ? step.prompt || '請在這裡描述任務。' : undefined,
     tool: type === 'tool'
       ? step.tool || { name: 'fsRead', params: { filePath: '' } }
       : undefined,
@@ -572,16 +579,39 @@ function resetStepType(step: BlueprintStep, type: BlueprintNodeType): Partial<Bl
 function defaultTitleForType(type: BlueprintNodeType): string {
   switch (type) {
     case 'prompt':
-      return 'Prompt Step'
+      return '提示步驟'
     case 'agent':
-      return 'Agent Step'
+      return '代理步驟'
     case 'tool':
-      return 'Tool Step'
+      return '工具步驟'
     case 'condition':
-      return 'Condition Step'
+      return '條件步驟'
     case 'merge':
-      return 'Merge Step'
+      return '合併步驟'
     case 'output':
-      return 'Output Step'
+      return '輸出步驟'
+  }
+}
+
+function localizeTemplateLabel(templateId: BlueprintTemplateId, lang: 'zh' | 'en'): string {
+  if (lang === 'en') {
+    return TEMPLATE_OPTIONS.find(option => option.value === templateId)?.label || templateId
+  }
+
+  switch (templateId) {
+    case 'custom':
+      return '自訂'
+    case 'prompt-chain':
+      return '簡單提示鏈'
+    case 'broadcast':
+      return '廣播'
+    case 'relay':
+      return '接力'
+    case 'debate':
+      return '辯論'
+    case 'subagent':
+      return '子代理'
+    default:
+      return templateId
   }
 }
