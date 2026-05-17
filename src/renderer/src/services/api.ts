@@ -258,6 +258,23 @@ export async function clearBrowserSession(sessionId: string): Promise<void> {
   }
 }
 
+export async function listRemoteBrowserSessions(): Promise<Array<{
+  id: string
+  providerId: string
+  providerName: string
+  url: string
+  accountLabel?: string
+  accountKey?: string
+  createdAt: number
+  updatedAt: number
+  hasPrompt: boolean
+}>> {
+  if (typeof window === 'undefined' || !window.aiWorkbench?.listSessions) {
+    return []
+  }
+  return window.aiWorkbench.listSessions()
+}
+
 export async function closeAllBrowsers(): Promise<void> {
   try {
     await invokeBrowserCloseAll()
@@ -267,42 +284,42 @@ export async function closeAllBrowsers(): Promise<void> {
 }
 
 async function invokeBrowserOpen(payload: { providerId: string; url: string; sessionId?: string; providerName?: string; forceNew?: boolean; accountLabel?: string; accountKey?: string }): Promise<{ sessionId?: string; providerId?: string; url?: string; status?: string; error?: string }> {
-  if (typeof window === 'undefined' || !window.aiWorkbench?.browserOpen) {
+  if (typeof window === 'undefined' || !window.aiWorkbench?.openSession) {
     return { error: 'Browser session API is unavailable' }
   }
-  return window.aiWorkbench.browserOpen(payload)
+  return window.aiWorkbench.openSession(payload)
 }
 
 async function invokeBrowserSend(sessionId: string, prompt: string): Promise<{ data?: { status?: string }; error?: string }> {
-  if (typeof window === 'undefined' || !window.aiWorkbench?.browserSend) {
+  if (typeof window === 'undefined' || !window.aiWorkbench?.sendPromptToSession) {
     return { error: 'Browser session API is unavailable' }
   }
-  const result = await window.aiWorkbench.browserSend(sessionId, prompt)
+  const result = await window.aiWorkbench.sendPromptToSession(sessionId, prompt)
   return result.success ? { data: { status: String(result.data && typeof result.data === 'object' ? (result.data as any).status || 'sent' : 'sent') } } : { error: result.error }
 }
 
 async function invokeBrowserRead(sessionId: string): Promise<{ content?: string; status?: string; error?: string }> {
-  if (typeof window === 'undefined' || !window.aiWorkbench?.browserRead) {
+  if (typeof window === 'undefined' || !window.aiWorkbench?.readSessionResponse) {
     return { error: 'Browser session API is unavailable' }
   }
-  return window.aiWorkbench.browserRead(sessionId)
+  return window.aiWorkbench.readSessionResponse(sessionId)
 }
 
 async function invokeBrowserClose(sessionId: string): Promise<void> {
-  if (typeof window === 'undefined' || !window.aiWorkbench?.browserClose) {
+  if (typeof window === 'undefined' || !window.aiWorkbench?.closeSession) {
     throw new Error('Browser session API is unavailable')
   }
-  const result = await window.aiWorkbench.browserClose(sessionId)
+  const result = await window.aiWorkbench.closeSession(sessionId)
   if (!result.success) {
     throw new Error(result.error || 'Failed to close browser session')
   }
 }
 
 async function invokeBrowserClear(sessionId: string): Promise<void> {
-  if (typeof window === 'undefined' || !window.aiWorkbench?.browserClear) {
+  if (typeof window === 'undefined' || !window.aiWorkbench?.clearSessionData) {
     throw new Error('Browser session API is unavailable')
   }
-  const result = await window.aiWorkbench.browserClear(sessionId)
+  const result = await window.aiWorkbench.clearSessionData(sessionId)
   if (!result.success) {
     throw new Error(result.error || 'Failed to clear browser session')
   }

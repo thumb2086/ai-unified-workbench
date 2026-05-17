@@ -1,6 +1,5 @@
 /// <reference types="electron" />
 
-import type React from 'react'
 import { ToolResult } from './workflow'
 
 export interface WebviewConfig {
@@ -10,19 +9,16 @@ export interface WebviewConfig {
 }
 
 declare global {
-  namespace JSX {
-    interface IntrinsicElements {
-      webview: React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & {
-        src?: string
-        partition?: string
-        allowpopups?: string
-      }
-    }
-  }
-
   interface Window {
     aiWorkbench: {
       version: string
+
+      openSession(payload: { providerId: string; url: string; sessionId?: string; providerName?: string; forceNew?: boolean; accountLabel?: string; accountKey?: string }): Promise<{ sessionId?: string; providerId?: string; url?: string; status?: string; error?: string }>
+      sendPromptToSession(sessionId: string, prompt: string): Promise<ToolResult>
+      readSessionResponse(sessionId: string): Promise<{ content?: string; status?: string; error?: string }>
+      closeSession(sessionId: string): Promise<ToolResult>
+      clearSessionData(sessionId: string): Promise<ToolResult>
+      listSessions(): Promise<Array<{ id: string; providerId: string; providerName: string; url: string; accountLabel?: string; accountKey?: string; createdAt: number; updatedAt: number; hasPrompt: boolean }>>
 
       // Webview Management
       createWebview(config: WebviewConfig): Promise<{ success: boolean; partition: string; error?: string }>

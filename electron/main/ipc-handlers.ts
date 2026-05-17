@@ -1,6 +1,16 @@
 // Use require for CommonJS compatibility
 const { ipcMain, BrowserWindow, webContents } = require('electron')
 import { configureSessionPartition, generatePartition, clearSession } from './session-manager'
+import {
+  clearBrowserSessionData,
+  closeAllBrowserSessions as closeAllPuppeteerSessions,
+  closeBrowserSession as closePuppeteerSession,
+  getChromeUserDataPath,
+  listBrowserSessions as listPuppeteerSessions,
+  openBrowserSession,
+  readBrowserSessionResponse,
+  sendPromptToBrowserSession,
+} from './browser-automation-service'
 import * as fs from 'fs/promises'
 import * as path from 'path'
 import { exec } from 'child_process'
@@ -333,134 +343,43 @@ async function handleBrowserOpen(
   _event: IpcMainInvokeEvent,
   payload: BrowserOpenPayload
 ): Promise<{ sessionId?: string; providerId?: string; url?: string; status?: string; error?: string }> {
-  const { providerId, url, sessionId: requestedSessionId, providerName, forceNew, accountLabel, accountKey } = payload
-
-  if (!providerId || !url) {
-    return { error: 'Missing providerId or url' }
-  }
-
-  const sessionId = requestedSessionId || `session_${providerId}_${Date.now()}`
-
-  try {
-    const session = forceNew
-      ? await createBrowserSession(sessionId, providerId, providerName || providerId, url, accountLabel, accountKey)
-      : await getOrCreateBrowserSession(sessionId, providerId, providerName || providerId, url, accountLabel, accountKey)
-
-    await focusBrowserSession(session, url)
-
-    return {
-      sessionId: session.id,
-      providerId: session.providerId,
-      url: session.url,
-      status: 'opened',
-    }
-  } catch (error: any) {
-    console.error('Browser open error:', error)
-    return { error: error.message || 'Failed to open browser session' }
-  }
+  return openBrowserSession(payload)
 }
 
 async function handleBrowserSend(
   _event: IpcMainInvokeEvent,
   payload: { sessionId: string; prompt: string }
 ): Promise<ToolResult> {
-  const session = browserSessions.get(payload.sessionId)
-  if (!session) {
-    return { success: false, error: 'Session not found' }
-  }
-
-  const config = BROWSER_SITE_CONFIGS[session.providerId]
-  if (!config) {
-    return { success: false, error: 'No automation config for this provider' }
-  }
-
-  try {
-    await session.window.webContents.executeJavaScript(buildSendScript(payload.prompt, config), true)
-    session.lastPrompt = payload.prompt
-    session.updatedAt = Date.now()
-    session.url = session.window.webContents.getURL() || session.url
-    return { success: true, data: { status: 'sent' } }
-  } catch (error: any) {
-    console.error('Browser send error:', error)
-    return { success: false, error: error.message || 'Failed to send prompt' }
-  }
+  return sendPromptToBrowserSession(payload.sessionId, payload.prompt)
 }
 
 async function handleBrowserRead(
   _event: IpcMainInvokeEvent,
   payload: { sessionId: string }
 ): Promise<{ content?: string; status?: string; error?: string }> {
-  const session = browserSessions.get(payload.sessionId)
-  if (!session) {
-    return { error: 'Session not found' }
-  }
-
-  const config = BROWSER_SITE_CONFIGS[session.providerId]
-  if (!config || !config.responseSelector) {
-    return { error: 'No read config for this provider' }
-  }
-
-  try {
-    if (config.waitForResponse) {
-      await delay(config.waitForResponse)
-    }
-
-    const content = await session.window.webContents.executeJavaScript(buildReadScript(config), true)
-    session.updatedAt = Date.now()
-    session.url = session.window.webContents.getURL() || session.url
-    return { content: String(content || ''), status: content ? 'success' : 'no_response' }
-  } catch (error: any) {
-    console.error('Browser read error:', error)
-    return { error: error.message || 'Failed to read response' }
-  }
+  return readBrowserSessionResponse(payload.sessionId)
 }
 
 async function handleBrowserClose(
   _event: IpcMainInvokeEvent,
   payload: { sessionId: string }
 ): Promise<ToolResult> {
-  try {
-    await closeBrowserSession(payload.sessionId)
-    return { success: true, data: { status: 'closed' } }
-  } catch (error: any) {
-    return { success: false, error: error.message || 'Failed to close browser session' }
-  }
+  return closePuppeteerSession(payload.sessionId)
 }
 
 async function handleBrowserClear(
   _event: IpcMainInvokeEvent,
   payload: { sessionId: string }
 ): Promise<ToolResult> {
-  try {
-    await closeBrowserSession(payload.sessionId)
-    await clearSession(generatePartition(payload.sessionId))
-    return { success: true, data: { status: 'cleared' } }
-  } catch (error: any) {
-    return { success: false, error: error.message || 'Failed to clear browser session' }
-  }
+  return clearBrowserSessionData(payload.sessionId)
 }
 
 async function handleBrowserCloseAll(): Promise<ToolResult> {
-  try {
-    await closeAllBrowserSessions()
-    return { success: true, data: { status: 'all closed' } }
-  } catch (error: any) {
-    return { success: false, error: error.message || 'Failed to close browser sessions' }
-  }
+  return closeAllPuppeteerSessions()
 }
 
 function handleBrowserList(): BrowserSessionSummary[] {
-  return Array.from(browserSessions.values()).map(session => ({
-    id: session.id,
-    providerId: session.providerId,
-    providerName: session.providerName,
-    url: session.url,
-    accountLabel: session.accountLabel,
-    accountKey: session.accountKey,
-    createdAt: session.createdAt,
-    updatedAt: session.updatedAt,
-    hasPrompt: Boolean(session.lastPrompt),
-  }))
+  return listPuppeteerSessions()
 }
 
 async function createBrowserSession(
@@ -964,8 +883,6 @@ export function getWebview(slotId: string): WebContents | undefined {
 // Chrome Profile Handlers
 // ============================================================================
 
-import * as os from 'os'
-
 interface ChromeProfile {
   name: string
   path: string
@@ -1039,21 +956,5 @@ async function handleImportChromeCookies(
       success: false, 
       error: error instanceof Error ? error.message : 'Failed to import cookies' 
     }
-  }
-}
-
-function getChromeUserDataPath(): string {
-  const platform = os.platform()
-  const home = os.homedir()
-
-  switch (platform) {
-    case 'win32':
-      return path.join(home, 'AppData', 'Local', 'Google', 'Chrome', 'User Data')
-    case 'darwin':
-      return path.join(home, 'Library', 'Application Support', 'Google', 'Chrome')
-    case 'linux':
-      return path.join(home, '.config', 'google-chrome')
-    default:
-      return ''
   }
 }

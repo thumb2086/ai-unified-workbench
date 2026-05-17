@@ -1,5 +1,6 @@
 import type { ProviderConfig } from '../types'
 import type { AiNode, WorkflowBlueprint, BlueprintNode } from '../types/workbench'
+import { buildWorkflowNodesFromSteps } from '../types/workbench'
 import type { WorkflowDefinition, WorkflowNode } from '../types/workflow'
 
 export function toProviderConfig(node: AiNode): ProviderConfig {
@@ -17,13 +18,17 @@ export function toProviderConfig(node: AiNode): ProviderConfig {
 }
 
 export function toWorkflowDefinition(workflow: WorkflowBlueprint): WorkflowDefinition {
+  const nodes = workflow.editorMode === 'form'
+    ? buildWorkflowNodesFromSteps(workflow.steps)
+    : workflow.nodes
+
   return {
     id: workflow.id,
     name: workflow.name,
     description: workflow.description,
     version: workflow.version,
     entryPoint: workflow.entryPoint,
-    nodes: workflow.nodes.map(toWorkflowNode),
+    nodes: nodes.map(toWorkflowNode),
   }
 }
 

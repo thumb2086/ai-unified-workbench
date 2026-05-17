@@ -1,95 +1,173 @@
-# AI 統一工作台 v0.3
+# AI Unified Workbench
 
-單頁多 AI 工作台，整合網頁版 AI 與 API 服務，支援比較、協作與代理式任務分派。
+Desktop AI workbench built with Electron + React. This version uses a Puppeteer-controlled browser session layer instead of embedded `webview` execution, and the workflow blueprint editor is now form-first instead of canvas-first.
 
-## 支援的 AI 服務
+## What Changed
 
-### 網頁版（手動/半自動）
-- ChatGPT
-- Gemini
-- Claude
-- Grok
+- Browser automation now runs through **Puppeteer-controlled Chrome sessions**
+- Browser sessions use **dedicated persistent profiles**
+- The old drag-heavy blueprint canvas has been replaced by a **step form builder**
+- Blueprints now support:
+  - template selection
+  - ordered step editing
+  - AI node assignment
+  - JSON/YAML generated preview
+  - direct execution from the same screen
+- GitHub Actions can build **Windows, macOS, and Linux** artifacts
 
-### API 版（自動）
-- OpenAI
-- OpenRouter
-- NVIDIA NIM
-- 自訂 API（OpenAI compatible）
+## How To Open The App
 
-## 啟動方式
+### Development
+
+1. Install dependencies:
 
 ```bash
 npm install
 ```
 
-### 網頁版（Vite 開發伺服器）
-```bash
-npm run dev
-```
-- 前端：http://localhost:5173
+2. Start the desktop app in development:
 
-### Electron 桌面版
 ```bash
 npm run dev:electron
 ```
-- 同時啟動 Vite 開發伺服器 + Electron 視窗
-- 注意：開發模式下 Node API 可直接暴露給渲染程序，生產環境需注意安全設定
 
-### 前後端分離（含 API 自動化）
-終端機 1：
+This launches:
+
+- Vite dev server for the renderer
+- Electron for the desktop shell
+
+### Optional API Server
+
+If you still need the local Node API from the older architecture:
+
 ```bash
-npm run server  # 後端 (port 3001)
+npm run server
 ```
-終端機 2：
+
+### Packaged Build
+
+Build the desktop app:
+
 ```bash
-npm run dev     # 前端 (port 5173)
+npm run build
 ```
 
-或使用 concurrently（同時啟動）：
-```bash
-npm run dev:full
+Artifacts are written to:
+
+```text
+release/
 ```
 
-## 指令總覽
+Open the generated app for your platform from that folder:
 
-| 指令 | 說明 |
-|------|------|
-| `npm run dev` | Vite 開發伺服器 |
-| `npm run dev:electron` | Vite + Electron |
-| `npm run server` | 後端 API 伺服器 |
-| `npm run dev:full` | 前後端同時啟動 |
-| `npm run typecheck` | 類型檢查 |
-| `npm run test` | 執行測試 |
-| `npm run build` | 建置前端 + Electron |
+- Windows: `.exe`
+- macOS: `.dmg`
+- Linux: `.AppImage`
 
-## 主要功能
-- **Provider 管理**：自訂 API 網址、API Key、模型名稱
-- **三欄式布局**：AI 選擇 | Prompt 編輯 | 回覆彙總
-- **多 API 格式**：OpenAI、NVIDIA NIM、Anthropic、自訂格式
-- **網頁自動化**：Playwright 操作瀏覽器
-- **Markdown 匯出**
-- **本地儲存**：localStorage 保存任務與設定
+## Browser Session Architecture
 
-## 專案結構
-```
-ai-unified-workbench/
-├── src/renderer/        # 前端 React
-│   ├── components/      # UI 組件
-│   ├── hooks/           # 自定義 hooks
-│   ├── types/           # TypeScript 類型
-│   └── App.tsx          # 主應用
-├── server/              # Node.js 後端
-│   ├── routes/api.ts    # API 代理
-│   ├── routes/browser.ts # Playwright 瀏覽器控制
-│   └── services/api-adapters.ts # API 格式轉換
-└── package.json
+Web AI providers such as ChatGPT, Gemini, Claude, and Grok are opened in Puppeteer-controlled Chrome windows.
+
+### First Run
+
+When you open a browser session for a provider:
+
+1. The app launches Chrome through Puppeteer
+2. A dedicated profile folder is created under:
+
+```text
+.browser-profiles/
 ```
 
-## API 格式說明
+3. You can log in normally in that Chrome window
+4. The session stays reusable for later runs unless you clear its profile
 
-| 格式 | 說明 | 端點 |
-|------|------|------|
-| `openai` | 標準 OpenAI | `/v1/chat/completions` |
-| `nvidia-nim` | NVIDIA NIM | `/v1/chat/completions` |
-| `anthropic` | Claude API | `/v1/messages` |
-| `custom` | 自訂解析 | 自動推斷 |
+### Session Controls
+
+From the `Web` tab you can:
+
+- open/focus a session
+- force a new session
+- send a prompt
+- read the latest response
+- close a session
+- clear the stored browser profile
+
+## Blueprint Builder
+
+The `Workflow` tab is now a form-first blueprint editor.
+
+### Built-in Templates
+
+- `Simple Prompt Chain`
+- `Broadcast`
+- `Relay`
+- `Debate`
+- `Subagent`
+
+### Editing Model
+
+Each blueprint is edited as ordered steps. Each step can be one of:
+
+- `prompt`
+- `agent`
+- `tool`
+- `condition`
+- `merge`
+- `output`
+
+For each step you can configure:
+
+- title
+- description
+- prompt
+- AI node / provider
+- tool params
+- condition branches
+- dependencies
+- output variable
+
+### Preview
+
+The builder generates a workflow definition preview in:
+
+- `JSON`
+- `YAML`
+
+### Legacy Workflows
+
+Previously stored graph workflows are migrated into the step-based form model when possible. If a workflow cannot be safely migrated, it is treated as legacy data.
+
+## Project Structure
+
+```text
+electron/
+  main/
+    browser-automation-service.ts   # Puppeteer browser session service
+    ipc-handlers.ts                 # Main-process IPC
+  preload/
+    index.ts                        # Renderer API bridge
+
+src/renderer/src/
+  components/webview/WebviewPool.tsx      # Browser control center
+  pages/WorkflowBlueprintPage.tsx         # Form-first blueprint builder
+  services/api.ts                         # Renderer-side browser/API helpers
+  types/workbench.ts                      # Blueprint + workbench models
+```
+
+## GitHub Actions
+
+The repository includes a matrix workflow that builds:
+
+- Windows
+- macOS
+- Linux
+
+Each run uploads the packaged artifacts so they can be downloaded directly from the workflow run.
+
+## Notes
+
+- The desktop shell is still Electron.
+- The product scope is still a multi-AI workbench.
+- Browser automation is no longer intended to rely on embedded webviews.
+- If a provider changes its DOM structure, its selector config in the browser automation service may need updating.

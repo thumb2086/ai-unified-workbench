@@ -13,6 +13,16 @@ export interface WebviewConfig {
   name?: string
 }
 
+export interface BrowserSessionOpenPayload {
+  providerId: string
+  url: string
+  sessionId?: string
+  providerName?: string
+  forceNew?: boolean
+  accountLabel?: string
+  accountKey?: string
+}
+
 export interface ToolResult {
   success: boolean
   data?: unknown
@@ -77,24 +87,48 @@ const aiWorkbenchAPI = {
   // Browser Session Management
   // ==========================================================================
 
-  async browserOpen(payload: { providerId: string; url: string; sessionId?: string; providerName?: string; forceNew?: boolean; accountLabel?: string; accountKey?: string }): Promise<{ sessionId?: string; providerId?: string; url?: string; status?: string; error?: string }> {
+  async openSession(payload: BrowserSessionOpenPayload): Promise<{ sessionId?: string; providerId?: string; url?: string; status?: string; error?: string }> {
     return ipcRenderer.invoke('browser:open', payload)
   },
 
-  async browserSend(sessionId: string, prompt: string): Promise<ToolResult> {
+  async sendPromptToSession(sessionId: string, prompt: string): Promise<ToolResult> {
     return ipcRenderer.invoke('browser:send', { sessionId, prompt })
   },
 
-  async browserRead(sessionId: string): Promise<{ content?: string; status?: string; error?: string }> {
+  async readSessionResponse(sessionId: string): Promise<{ content?: string; status?: string; error?: string }> {
     return ipcRenderer.invoke('browser:read', { sessionId })
   },
 
-  async browserClose(sessionId: string): Promise<ToolResult> {
+  async closeSession(sessionId: string): Promise<ToolResult> {
     return ipcRenderer.invoke('browser:close', { sessionId })
   },
 
-  async browserClear(sessionId: string): Promise<ToolResult> {
+  async clearSessionData(sessionId: string): Promise<ToolResult> {
     return ipcRenderer.invoke('browser:clear', { sessionId })
+  },
+
+  async listSessions(): Promise<{ id: string; providerId: string; providerName: string; url: string; accountLabel?: string; accountKey?: string; createdAt: number; updatedAt: number; hasPrompt: boolean }[]> {
+    return ipcRenderer.invoke('browser:list')
+  },
+
+  async browserOpen(payload: { providerId: string; url: string; sessionId?: string; providerName?: string; forceNew?: boolean; accountLabel?: string; accountKey?: string }): Promise<{ sessionId?: string; providerId?: string; url?: string; status?: string; error?: string }> {
+    return aiWorkbenchAPI.openSession(payload)
+  },
+
+  async browserSend(sessionId: string, prompt: string): Promise<ToolResult> {
+    return aiWorkbenchAPI.sendPromptToSession(sessionId, prompt)
+  },
+
+  async browserRead(sessionId: string): Promise<{ content?: string; status?: string; error?: string }> {
+    return aiWorkbenchAPI.readSessionResponse(sessionId)
+  },
+
+  async browserClose(sessionId: string): Promise<ToolResult> {
+    return aiWorkbenchAPI.closeSession(sessionId)
+  },
+
+  async browserClear(sessionId: string): Promise<ToolResult> {
+    return aiWorkbenchAPI.clearSessionData(sessionId)
   },
 
   async browserCloseAll(): Promise<ToolResult> {
@@ -102,7 +136,7 @@ const aiWorkbenchAPI = {
   },
 
   async browserList(): Promise<{ id: string; providerId: string; providerName: string; url: string; accountLabel?: string; accountKey?: string; createdAt: number; updatedAt: number; hasPrompt: boolean }[]> {
-    return ipcRenderer.invoke('browser:list')
+    return aiWorkbenchAPI.listSessions()
   },
 
   // ==========================================================================

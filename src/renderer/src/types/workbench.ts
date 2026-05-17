@@ -3,6 +3,8 @@ export type AiNodeKind = 'web' | 'api'
 export type AiProvider = 'chatgpt' | 'gemini' | 'claude' | 'grok' | string
 export type BlueprintNodeType = 'prompt' | 'agent' | 'tool' | 'condition' | 'merge' | 'output'
 export type ChatMode = 'broadcast' | 'relay' | 'debate' | 'subagent'
+export type BlueprintEditorMode = 'form' | 'legacy'
+export type BlueprintTemplateId = 'prompt-chain' | 'broadcast' | 'relay' | 'debate' | 'subagent' | 'custom'
 
 export interface AiNode {
   id: string
@@ -54,14 +56,32 @@ export interface BlueprintNode {
   }
 }
 
+export interface BlueprintStep {
+  id: string
+  type: BlueprintNodeType
+  title: string
+  description?: string
+  prompt?: string
+  aiNodeId?: string
+  provider?: AiProvider
+  dependsOn: string[]
+  outputVar?: string
+  tool?: BlueprintNode['tool']
+  condition?: BlueprintNode['condition']
+}
+
 export interface WorkflowBlueprint {
   id: string
   name: string
   description?: string
   version: string
   entryPoint: string
+  templateId: BlueprintTemplateId
+  editorMode: BlueprintEditorMode
+  steps: BlueprintStep[]
   nodes: BlueprintNode[]
   updatedAt: string
+  legacySource?: boolean
 }
 
 export interface ChatMessage {
@@ -102,359 +122,124 @@ export function createDefaultAiNodes(): AiNode[] {
 export function createDefaultWorkflows(): WorkflowBlueprint[] {
   const now = new Date().toISOString()
   return [
-    createSimplePromptChain(now),
-    createBroadcastWorkflow(now),
-    createRelayWorkflow(now),
-    createDebateWorkflow(now),
-    createSubagentWorkflow(now),
+    createWorkflowFromTemplate('prompt-chain', now),
+    createWorkflowFromTemplate('broadcast', now),
+    createWorkflowFromTemplate('relay', now),
+    createWorkflowFromTemplate('debate', now),
+    createWorkflowFromTemplate('subagent', now),
   ]
 }
 
 export function mergeBuiltinWorkflows(workflows: WorkflowBlueprint[]): WorkflowBlueprint[] {
+  const migrated = workflows.map(migrateWorkflowBlueprint)
   const builtin = createDefaultWorkflows()
-  const storedById = new Map(workflows.map(workflow => [workflow.id, workflow]))
-  const mergedBuiltin = builtin.map(workflow => {
-    const stored = storedById.get(workflow.id)
-    return stored ? ensureWorkflowHasOutput(stored) : workflow
-  })
-  const custom = workflows.filter(workflow => !BUILTIN_WORKFLOW_IDS.has(workflow.id))
+  const storedById = new Map(migrated.map(workflow => [workflow.id, workflow]))
+  const mergedBuiltin = builtin.map(workflow => storedById.get(workflow.id) ?? workflow)
+  const custom = migrated.filter(workflow => !BUILTIN_WORKFLOW_IDS.has(workflow.id))
   return [...mergedBuiltin, ...custom]
 }
 
-function ensureWorkflowHasOutput(workflow: WorkflowBlueprint): WorkflowBlueprint {
-  if (workflow.nodes.some(node => node.type === 'output')) return workflow
-  if (workflow.nodes.length === 0) return workflow
+export function migrateWorkflowBlueprint(workflow: WorkflowBlueprint): WorkflowBlueprint {
+  if (workflow.steps && workflow.templateId && workflow.editorMode) {
+    return {
+      ...workflow,
+      nodes: buildWorkflowNodesFromSteps(workflow.steps),
+      entryPoint: workflow.entryPoint || workflow.steps[0]?.id || workflow.nodes[0]?.id || '',
+    }
+  }
 
-  const dependencyIds = new Set(workflow.nodes.flatMap(node => node.dependsOn))
-  const terminalNodes = workflow.nodes.filter(node => !dependencyIds.has(node.id))
-  const dependsOn = terminalNodes.length > 0
-    ? terminalNodes.map(node => node.id)
-    : [workflow.nodes[workflow.nodes.length - 1].id]
-  const maxX = Math.max(...workflow.nodes.map(node => node.position.x))
-  const avgY = Math.round(
-    dependsOn
-      .map(id => workflow.nodes.find(node => node.id === id)?.position.y ?? 160)
-      .reduce((sum, y) => sum + y, 0) / dependsOn.length,
-  )
+  const fromNodes = convertNodesToSteps(workflow.nodes || [])
+  if (fromNodes.length > 0) {
+    const inferredTemplate = inferTemplateId(workflow.id)
+    return {
+      ...workflow,
+      templateId: inferredTemplate,
+      editorMode: 'form',
+      steps: fromNodes,
+      nodes: buildWorkflowNodesFromSteps(fromNodes),
+      entryPoint: workflow.entryPoint || fromNodes[0]?.id || '',
+    }
+  }
 
   return {
     ...workflow,
-    nodes: [
-      ...workflow.nodes,
-      {
-        id: `${workflow.id}-output`,
-        type: 'output',
-        title: '\u6700\u7d42\u8f38\u51fa',
-        description: '\u5de5\u4f5c\u6d41\u7684\u7d50\u679c\u51fa\u53e3\u3002',
-        dependsOn,
-        outputVar: 'final_output',
-        position: { x: maxX + 360, y: avgY },
-      },
-    ],
+    templateId: 'custom',
+    editorMode: 'legacy',
+    steps: [],
+    nodes: workflow.nodes || [],
+    legacySource: true,
   }
 }
 
-function createSimplePromptChain(now: string): WorkflowBlueprint {
-  return {
-    id: 'prompt-chain',
-    name: '\u7c21\u55ae\u63d0\u793a\u93c8',
-    description: '\u5148\u7528 prompt \u6574\u7406\u5167\u5bb9\uff0c\u518d\u4ea4\u7d66 AI \u7bc0\u9ede\u8655\u7406\u3002',
-    version: '1.0',
-    entryPoint: 'prompt-1',
-    updatedAt: now,
-    nodes: [
-      {
-        id: 'prompt-1',
-        type: 'prompt',
-        title: '\u63d0\u793a\u8a5e',
-        prompt: 'Write a short story about AI.',
-        dependsOn: [],
-        outputVar: 'story',
-        position: { x: 120, y: 180 },
-      },
-      {
-        id: 'agent-1',
-        type: 'agent',
-        title: '\u4ee3\u7406\u4eba',
-        agent: { provider: 'chatgpt' },
-        prompt: 'Summarize this story: {{story}}',
-        dependsOn: ['prompt-1'],
-        outputVar: 'summary',
-        position: { x: 460, y: 180 },
-      },
-      {
-        id: 'prompt-chain-output',
-        type: 'output',
-        title: '\u6700\u7d42\u8f38\u51fa',
-        description: '\u8f38\u51fa\u6458\u8981\u7d50\u679c\u3002',
-        dependsOn: ['agent-1'],
-        outputVar: 'final_output',
-        position: { x: 820, y: 180 },
-      },
-    ],
-  }
+export function buildWorkflowNodesFromSteps(steps: BlueprintStep[]): BlueprintNode[] {
+  const positions = buildAutoLayout(steps)
+  return steps.map(step => ({
+    id: step.id,
+    type: step.type,
+    title: step.title,
+    description: step.description,
+    aiNodeId: step.aiNodeId,
+    agent: step.type === 'agent'
+      ? {
+          provider: step.provider,
+        }
+      : undefined,
+    prompt: step.prompt,
+    dependsOn: [...step.dependsOn],
+    outputVar: step.outputVar,
+    position: positions.get(step.id) || { x: 120, y: 160 },
+    tool: step.tool,
+    condition: step.condition,
+  }))
 }
 
-function createBroadcastWorkflow(now: string): WorkflowBlueprint {
+export function createWorkflowFromTemplate(templateId: Exclude<BlueprintTemplateId, 'custom'>, now = new Date().toISOString()): WorkflowBlueprint {
+  const base = TEMPLATE_METADATA[templateId]
+  const steps = createTemplateSteps(templateId)
   return {
-    id: 'broadcast-workflow',
-    name: '\u5ee3\u64ad\u5de5\u4f5c\u6d41',
-    description: '\u540c\u4e00\u500b\u4e3b\u984c\u540c\u6642\u9001\u7d66\u591a\u500b AI \u7bc0\u9ede\u3002',
+    id: base.id,
+    name: base.name,
+    description: base.description,
     version: '1.0',
-    entryPoint: 'broadcast-topic',
+    entryPoint: steps[0]?.id || '',
+    templateId,
+    editorMode: 'form',
+    steps,
+    nodes: buildWorkflowNodesFromSteps(steps),
     updatedAt: now,
-    nodes: [
-      {
-        id: 'broadcast-topic',
-        type: 'prompt',
-        title: '\u5ee3\u64ad\u4e3b\u984c',
-        prompt: 'Analyze the topic from multiple perspectives: {{topic}}',
-        dependsOn: [],
-        outputVar: 'topic',
-        position: { x: 120, y: 220 },
-      },
-      {
-        id: 'broadcast-chatgpt',
-        type: 'agent',
-        title: 'ChatGPT',
-        agent: { provider: 'chatgpt' },
-        prompt: 'Provide the first perspective for: {{topic}}',
-        dependsOn: ['broadcast-topic'],
-        outputVar: 'chatgpt_result',
-        position: { x: 460, y: 80 },
-      },
-      {
-        id: 'broadcast-gemini',
-        type: 'agent',
-        title: 'Gemini',
-        agent: { provider: 'gemini' },
-        prompt: 'Provide the second perspective for: {{topic}}',
-        dependsOn: ['broadcast-topic'],
-        outputVar: 'gemini_result',
-        position: { x: 460, y: 220 },
-      },
-      {
-        id: 'broadcast-claude',
-        type: 'agent',
-        title: 'Claude',
-        agent: { provider: 'claude' },
-        prompt: 'Provide the third perspective for: {{topic}}',
-        dependsOn: ['broadcast-topic'],
-        outputVar: 'claude_result',
-        position: { x: 460, y: 360 },
-      },
-      {
-        id: 'broadcast-merge',
-        type: 'merge',
-        title: '\u5f59\u6574',
-        description: '\u628a\u591a\u500b AI \u7684\u56de\u8986\u5408\u4f75\u3002',
-        dependsOn: ['broadcast-chatgpt', 'broadcast-gemini', 'broadcast-claude'],
-        outputVar: 'broadcast_summary',
-        position: { x: 820, y: 220 },
-      },
-      {
-        id: 'broadcast-output',
-        type: 'output',
-        title: '\u6700\u7d42\u8f38\u51fa',
-        description: '\u5448\u73fe\u5ee3\u64ad\u5f8c\u7684\u7d71\u6574\u7d50\u679c\u3002',
-        dependsOn: ['broadcast-merge'],
-        outputVar: 'final_output',
-        position: { x: 1180, y: 220 },
-      },
-    ],
-  }
-}
-
-function createRelayWorkflow(now: string): WorkflowBlueprint {
-  return {
-    id: 'relay-workflow',
-    name: '\u63a5\u529b\u5de5\u4f5c\u6d41',
-    description: '\u4e0a\u4e00\u500b\u7bc0\u9ede\u7684\u8f38\u51fa\uff0c\u6703\u6210\u70ba\u4e0b\u4e00\u500b\u7bc0\u9ede\u7684\u8f38\u5165\u3002',
-    version: '1.0',
-    entryPoint: 'relay-topic',
-    updatedAt: now,
-    nodes: [
-      {
-        id: 'relay-topic',
-        type: 'prompt',
-        title: '\u8d77\u59cb\u984c\u76ee',
-        prompt: 'Create the initial outline: {{seed}}',
-        dependsOn: [],
-        outputVar: 'seed',
-        position: { x: 120, y: 220 },
-      },
-      {
-        id: 'relay-1',
-        type: 'agent',
-        title: '\u7b2c\u4e00\u68d2',
-        agent: { provider: 'chatgpt' },
-        prompt: 'Expand the initial outline: {{seed}}',
-        dependsOn: ['relay-topic'],
-        outputVar: 'step_one',
-        position: { x: 420, y: 140 },
-      },
-      {
-        id: 'relay-2',
-        type: 'agent',
-        title: '\u7b2c\u4e8c\u68d2',
-        agent: { provider: 'gemini' },
-        prompt: 'Refine the expanded outline: {{step_one}}',
-        dependsOn: ['relay-1'],
-        outputVar: 'step_two',
-        position: { x: 740, y: 220 },
-      },
-      {
-        id: 'relay-3',
-        type: 'agent',
-        title: '\u7b2c\u4e09\u68d2',
-        agent: { provider: 'claude' },
-        prompt: 'Turn the refined outline into a final answer: {{step_two}}',
-        dependsOn: ['relay-2'],
-        outputVar: 'relay_result',
-        position: { x: 1060, y: 300 },
-      },
-      {
-        id: 'relay-output',
-        type: 'output',
-        title: '\u6700\u7d42\u8f38\u51fa',
-        description: '\u63a5\u529b\u5b8c\u6210\u5f8c\u7684\u6700\u7d42\u7d50\u679c\u3002',
-        dependsOn: ['relay-3'],
-        outputVar: 'final_output',
-        position: { x: 1420, y: 300 },
-      },
-    ],
-  }
-}
-
-function createDebateWorkflow(now: string): WorkflowBlueprint {
-  return {
-    id: 'debate-workflow',
-    name: '\u8faf\u8ad6\u5de5\u4f5c\u6d41',
-    description: '\u6b63\u53cd\u96d9\u65b9\u5404\u81ea\u56de\u61c9\uff0c\u6700\u5f8c\u518d\u5408\u4f75\u7d50\u679c\u3002',
-    version: '1.0',
-    entryPoint: 'debate-topic',
-    updatedAt: now,
-    nodes: [
-      {
-        id: 'debate-topic',
-        type: 'prompt',
-        title: '\u8faf\u8ad6\u4e3b\u984c',
-        prompt: 'Debate the topic: {{topic}}',
-        dependsOn: [],
-        outputVar: 'topic',
-        position: { x: 120, y: 220 },
-      },
-      {
-        id: 'debate-pro',
-        type: 'agent',
-        title: '\u6b63\u65b9',
-        agent: { provider: 'chatgpt' },
-        prompt: 'Argue for the topic: {{topic}}',
-        dependsOn: ['debate-topic'],
-        outputVar: 'pro_argument',
-        position: { x: 460, y: 120 },
-      },
-      {
-        id: 'debate-con',
-        type: 'agent',
-        title: '\u53cd\u65b9',
-        agent: { provider: 'gemini' },
-        prompt: 'Argue against the topic: {{topic}}',
-        dependsOn: ['debate-topic'],
-        outputVar: 'con_argument',
-        position: { x: 460, y: 320 },
-      },
-      {
-        id: 'debate-merge',
-        type: 'merge',
-        title: '\u8faf\u8ad6\u7d50\u8ad6',
-        description: '\u6574\u5408\u6b63\u53cd\u65b9\u7684\u91cd\u9ede\u8ad6\u9ede\u3002',
-        dependsOn: ['debate-pro', 'debate-con'],
-        outputVar: 'debate_summary',
-        position: { x: 820, y: 220 },
-      },
-      {
-        id: 'debate-output',
-        type: 'output',
-        title: '\u6700\u7d42\u8f38\u51fa',
-        description: '\u8f38\u51fa\u8faf\u8ad6\u5f8c\u7684\u7d50\u8ad6\u3002',
-        dependsOn: ['debate-merge'],
-        outputVar: 'final_output',
-        position: { x: 1180, y: 220 },
-      },
-    ],
-  }
-}
-
-function createSubagentWorkflow(now: string): WorkflowBlueprint {
-  return {
-    id: 'subagent-workflow',
-    name: '\u5b50\u4ee3\u7406\u5de5\u4f5c\u6d41',
-    description: '\u4e3b\u4ee3\u7406\u5148\u898f\u5283\uff0c\u518d\u7531\u5b50\u4ee3\u7406\u88dc\u5145\u7d30\u7bc0\u3002',
-    version: '1.0',
-    entryPoint: 'subagent-brief',
-    updatedAt: now,
-    nodes: [
-      {
-        id: 'subagent-brief',
-        type: 'prompt',
-        title: '\u4efb\u52d9\u7c21\u5831',
-        prompt: 'Prepare the task brief: {{brief}}',
-        dependsOn: [],
-        outputVar: 'brief',
-        position: { x: 120, y: 220 },
-      },
-      {
-        id: 'subagent-master',
-        type: 'agent',
-        title: '\u4e3b\u4ee3\u7406',
-        agent: { provider: 'chatgpt' },
-        prompt: 'Plan the work and delegate subtasks: {{brief}}',
-        dependsOn: ['subagent-brief'],
-        outputVar: 'master_plan',
-        position: { x: 460, y: 140 },
-      },
-      {
-        id: 'subagent-worker',
-        type: 'agent',
-        title: '\u5b50\u4ee3\u7406',
-        agent: { provider: 'claude' },
-        prompt: 'Complete the detailed execution steps: {{master_plan}}',
-        dependsOn: ['subagent-master'],
-        outputVar: 'worker_detail',
-        position: { x: 820, y: 280 },
-      },
-      {
-        id: 'subagent-merge',
-        type: 'merge',
-        title: '\u6700\u7d42\u8f38\u51fa',
-        description: '\u5408\u4f75\u4e3b\u4ee3\u7406\u8207\u5b50\u4ee3\u7406\u7684\u7d50\u679c\u3002',
-        dependsOn: ['subagent-master', 'subagent-worker'],
-        outputVar: 'subagent_result',
-        position: { x: 1120, y: 220 },
-      },
-      {
-        id: 'subagent-output',
-        type: 'output',
-        title: '\u6700\u7d42\u8f38\u51fa',
-        description: '\u8f38\u51fa\u4e3b\u4ee3\u7406\u8207\u5b50\u4ee3\u7406\u6574\u5408\u5f8c\u7684\u7d50\u679c\u3002',
-        dependsOn: ['subagent-merge'],
-        outputVar: 'final_output',
-        position: { x: 1480, y: 220 },
-      },
-    ],
   }
 }
 
 export function createEmptyWorkflow(): WorkflowBlueprint {
   const now = new Date().toISOString()
+  const seed = Date.now()
+  const steps: BlueprintStep[] = [
+    {
+      id: `prompt-${seed}`,
+      type: 'prompt',
+      title: 'Start Prompt',
+      prompt: 'Describe the task.',
+      dependsOn: [],
+      outputVar: 'input',
+    },
+    {
+      id: `output-${seed + 1}`,
+      type: 'output',
+      title: 'Final Output',
+      dependsOn: [`prompt-${seed}`],
+      outputVar: 'final_output',
+    },
+  ]
   return {
     id: `workflow-${Date.now()}`,
-    name: '\u65b0\u5de5\u4f5c\u6d41',
+    name: 'New Workflow',
     description: '',
     version: '1.0',
-    entryPoint: '',
-    nodes: [],
+    entryPoint: steps[0].id,
+    templateId: 'custom',
+    editorMode: 'form',
+    steps,
+    nodes: buildWorkflowNodesFromSteps(steps),
     updatedAt: now,
   }
 }
@@ -464,7 +249,7 @@ export function createEmptyAiNode(kind: AiNodeKind = 'web'): AiNode {
   const id = `ai-${Date.now()}`
   return {
     id,
-    name: kind === 'web' ? '\u65b0\u7684 Web \u7bc0\u9ede' : '\u65b0\u7684 API \u7bc0\u9ede',
+    name: kind === 'web' ? 'New Web Node' : 'New API Node',
     kind,
     provider: kind === 'web' ? 'chatgpt' : 'openai',
     enabled: true,
@@ -477,6 +262,160 @@ export function createEmptyAiNode(kind: AiNodeKind = 'web'): AiNode {
     createdAt: now,
     updatedAt: now,
   }
+}
+
+function createTemplateSteps(templateId: Exclude<BlueprintTemplateId, 'custom'>): BlueprintStep[] {
+  switch (templateId) {
+    case 'prompt-chain':
+      return [
+        { id: 'prompt-1', type: 'prompt', title: 'Prompt', prompt: 'Write a short story about AI.', dependsOn: [], outputVar: 'story' },
+        { id: 'agent-1', type: 'agent', title: 'Agent', provider: 'chatgpt', prompt: 'Summarize this story: {{story}}', dependsOn: ['prompt-1'], outputVar: 'summary' },
+        { id: 'prompt-chain-output', type: 'output', title: 'Final Output', dependsOn: ['agent-1'], outputVar: 'final_output' },
+      ]
+    case 'broadcast':
+      return [
+        { id: 'broadcast-topic', type: 'prompt', title: 'Broadcast Topic', prompt: 'Analyze the topic from multiple perspectives: {{topic}}', dependsOn: [], outputVar: 'topic' },
+        { id: 'broadcast-chatgpt', type: 'agent', title: 'ChatGPT', provider: 'chatgpt', prompt: 'Provide the first perspective for: {{topic}}', dependsOn: ['broadcast-topic'], outputVar: 'chatgpt_result' },
+        { id: 'broadcast-gemini', type: 'agent', title: 'Gemini', provider: 'gemini', prompt: 'Provide the second perspective for: {{topic}}', dependsOn: ['broadcast-topic'], outputVar: 'gemini_result' },
+        { id: 'broadcast-claude', type: 'agent', title: 'Claude', provider: 'claude', prompt: 'Provide the third perspective for: {{topic}}', dependsOn: ['broadcast-topic'], outputVar: 'claude_result' },
+        { id: 'broadcast-merge', type: 'merge', title: 'Merge', description: 'Combine multiple perspectives.', dependsOn: ['broadcast-chatgpt', 'broadcast-gemini', 'broadcast-claude'], outputVar: 'broadcast_summary' },
+        { id: 'broadcast-output', type: 'output', title: 'Final Output', dependsOn: ['broadcast-merge'], outputVar: 'final_output' },
+      ]
+    case 'relay':
+      return [
+        { id: 'relay-topic', type: 'prompt', title: 'Seed Prompt', prompt: 'Create the initial outline: {{seed}}', dependsOn: [], outputVar: 'seed' },
+        { id: 'relay-1', type: 'agent', title: 'First Pass', provider: 'chatgpt', prompt: 'Expand the initial outline: {{seed}}', dependsOn: ['relay-topic'], outputVar: 'step_one' },
+        { id: 'relay-2', type: 'agent', title: 'Second Pass', provider: 'gemini', prompt: 'Refine the expanded outline: {{step_one}}', dependsOn: ['relay-1'], outputVar: 'step_two' },
+        { id: 'relay-3', type: 'agent', title: 'Final Pass', provider: 'claude', prompt: 'Turn the refined outline into a final answer: {{step_two}}', dependsOn: ['relay-2'], outputVar: 'relay_result' },
+        { id: 'relay-output', type: 'output', title: 'Final Output', dependsOn: ['relay-3'], outputVar: 'final_output' },
+      ]
+    case 'debate':
+      return [
+        { id: 'debate-topic', type: 'prompt', title: 'Debate Topic', prompt: 'Debate the topic: {{topic}}', dependsOn: [], outputVar: 'topic' },
+        { id: 'debate-pro', type: 'agent', title: 'Pro', provider: 'chatgpt', prompt: 'Argue for the topic: {{topic}}', dependsOn: ['debate-topic'], outputVar: 'pro_argument' },
+        { id: 'debate-con', type: 'agent', title: 'Con', provider: 'gemini', prompt: 'Argue against the topic: {{topic}}', dependsOn: ['debate-topic'], outputVar: 'con_argument' },
+        { id: 'debate-merge', type: 'merge', title: 'Debate Summary', description: 'Summarize both sides.', dependsOn: ['debate-pro', 'debate-con'], outputVar: 'debate_summary' },
+        { id: 'debate-output', type: 'output', title: 'Final Output', dependsOn: ['debate-merge'], outputVar: 'final_output' },
+      ]
+    case 'subagent':
+      return [
+        { id: 'subagent-brief', type: 'prompt', title: 'Task Brief', prompt: 'Prepare the task brief: {{brief}}', dependsOn: [], outputVar: 'brief' },
+        { id: 'subagent-master', type: 'agent', title: 'Master Agent', provider: 'chatgpt', prompt: 'Plan the work and delegate subtasks: {{brief}}', dependsOn: ['subagent-brief'], outputVar: 'master_plan' },
+        { id: 'subagent-worker', type: 'agent', title: 'Worker Agent', provider: 'claude', prompt: 'Complete the detailed execution steps: {{master_plan}}', dependsOn: ['subagent-master'], outputVar: 'worker_detail' },
+        { id: 'subagent-merge', type: 'merge', title: 'Merge', dependsOn: ['subagent-master', 'subagent-worker'], outputVar: 'subagent_result' },
+        { id: 'subagent-output', type: 'output', title: 'Final Output', dependsOn: ['subagent-merge'], outputVar: 'final_output' },
+      ]
+  }
+}
+
+function convertNodesToSteps(nodes: BlueprintNode[]): BlueprintStep[] {
+  const levelMap = buildLevelMap(nodes)
+  return [...nodes]
+    .sort((a, b) => (levelMap.get(a.id) ?? 0) - (levelMap.get(b.id) ?? 0))
+    .map(node => ({
+      id: node.id,
+      type: node.type,
+      title: node.title,
+      description: node.description,
+      prompt: node.prompt,
+      aiNodeId: node.aiNodeId,
+      provider: node.agent?.provider,
+      dependsOn: [...node.dependsOn],
+      outputVar: node.outputVar,
+      tool: node.tool,
+      condition: node.condition,
+    }))
+}
+
+function buildAutoLayout(steps: BlueprintStep[]): Map<string, BlueprintPosition> {
+  const levelMap = new Map<string, number>()
+  const byId = new Map(steps.map(step => [step.id, step]))
+
+  const assignLevel = (step: BlueprintStep): number => {
+    if (levelMap.has(step.id)) return levelMap.get(step.id) || 0
+    if (step.dependsOn.length === 0) {
+      levelMap.set(step.id, 0)
+      return 0
+    }
+    const level = Math.max(...step.dependsOn.map(depId => assignLevel(byId.get(depId) || { ...step, id: depId, dependsOn: [] } as BlueprintStep)), 0) + 1
+    levelMap.set(step.id, level)
+    return level
+  }
+
+  steps.forEach(assignLevel)
+  const rows = new Map<number, BlueprintStep[]>()
+  steps.forEach(step => {
+    const level = levelMap.get(step.id) || 0
+    rows.set(level, [...(rows.get(level) || []), step])
+  })
+
+  const positions = new Map<string, BlueprintPosition>()
+  for (const [level, row] of rows.entries()) {
+    row.forEach((step, index) => {
+      positions.set(step.id, {
+        x: 120 + level * 320,
+        y: 140 + index * 170,
+      })
+    })
+  }
+  return positions
+}
+
+function buildLevelMap(nodes: BlueprintNode[]): Map<string, number> {
+  const byId = new Map(nodes.map(node => [node.id, node]))
+  const levelMap = new Map<string, number>()
+  const visit = (node: BlueprintNode): number => {
+    if (levelMap.has(node.id)) return levelMap.get(node.id) || 0
+    if (node.dependsOn.length === 0) {
+      levelMap.set(node.id, 0)
+      return 0
+    }
+    const level = Math.max(...node.dependsOn.map(depId => {
+      const dep = byId.get(depId)
+      return dep ? visit(dep) : 0
+    }), 0) + 1
+    levelMap.set(node.id, level)
+    return level
+  }
+  nodes.forEach(visit)
+  return levelMap
+}
+
+function inferTemplateId(id: string): BlueprintTemplateId {
+  if (id === 'prompt-chain') return 'prompt-chain'
+  if (id === 'broadcast-workflow') return 'broadcast'
+  if (id === 'relay-workflow') return 'relay'
+  if (id === 'debate-workflow') return 'debate'
+  if (id === 'subagent-workflow') return 'subagent'
+  return 'custom'
+}
+
+const TEMPLATE_METADATA: Record<Exclude<BlueprintTemplateId, 'custom'>, { id: string; name: string; description: string }> = {
+  'prompt-chain': {
+    id: 'prompt-chain',
+    name: 'Simple Prompt Chain',
+    description: 'Use a prompt step and send the result into a single agent.',
+  },
+  broadcast: {
+    id: 'broadcast-workflow',
+    name: 'Broadcast Workflow',
+    description: 'Send the same topic to multiple AI nodes and merge the results.',
+  },
+  relay: {
+    id: 'relay-workflow',
+    name: 'Relay Workflow',
+    description: 'Pass each step result into the next AI node in sequence.',
+  },
+  debate: {
+    id: 'debate-workflow',
+    name: 'Debate Workflow',
+    description: 'Generate opposing views and merge them into a conclusion.',
+  },
+  subagent: {
+    id: 'subagent-workflow',
+    name: 'Subagent Workflow',
+    description: 'Use a planner/worker pattern for decomposition and execution.',
+  },
 }
 
 const BUILTIN_WORKFLOW_IDS = new Set([

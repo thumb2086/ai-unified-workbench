@@ -1,7 +1,7 @@
 // Use require for CommonJS compatibility
-const { app, BrowserWindow, ipcMain } = require('electron')
+const { app, BrowserWindow } = require('electron')
 import { join } from 'node:path'
-import { registerIpcHandlers, registerWebview } from './ipc-handlers'
+import { registerIpcHandlers } from './ipc-handlers'
 
 const isDev = !app.isPackaged
 
@@ -18,21 +18,9 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
-      webSecurity: false, // Allow embedding AI sites
-      allowRunningInsecureContent: true,
-      webviewTag: true
+      webSecurity: false,
+      allowRunningInsecureContent: true
     }
-  })
-
-  win.webContents.on('will-attach-webview', (_event: any, webPreferences: any) => {
-    webPreferences.nodeIntegration = false
-    webPreferences.contextIsolation = true
-    webPreferences.sandbox = false
-  })
-
-  // Handle webview attachment
-  win.webContents.on('did-attach-webview', (_: any, wc: any) => {
-    wc.setWindowOpenHandler(() => ({ action: 'allow' }))
   })
 
   if (isDev) {
@@ -46,12 +34,6 @@ function createWindow() {
 
 // Register IPC handlers before app ready
 registerIpcHandlers()
-
-// Additional IPC for webview registration from renderer
-ipcMain.handle('webview:register', (_event: any, slotId: string, webContentsId: number) => {
-  registerWebview(slotId, webContentsId)
-  return { success: true }
-})
 
 app.whenReady().then(() => {
   createWindow()
