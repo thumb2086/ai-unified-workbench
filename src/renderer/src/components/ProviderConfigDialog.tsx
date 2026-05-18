@@ -20,6 +20,7 @@ const API_FORMATS: { id: ApiFormat; label: string }[] = [
 const DEFAULT_PROVIDERS: Omit<ProviderConfig, 'id'>[] = [
   { name: 'ChatGPT', type: 'web', webUrl: 'https://chatgpt.com/' },
   { name: 'Gemini', type: 'web', webUrl: 'https://gemini.google.com/app' },
+  { name: 'AI Studio', type: 'web', webUrl: 'https://aistudio.google.com/prompts/new_chat' },
   { name: 'Claude', type: 'web', webUrl: 'https://claude.ai/new' },
   { name: 'Grok', type: 'web', webUrl: 'https://grok.com/' },
   { name: 'OpenAI', type: 'api', apiFormat: 'openai', baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o' },

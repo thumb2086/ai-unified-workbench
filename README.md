@@ -66,7 +66,7 @@ Open the generated app for your platform from that folder:
 
 ## Browser Session Architecture
 
-Web AI providers such as ChatGPT, Gemini, Claude, and Grok are opened in Puppeteer-controlled Chrome windows.
+Web AI providers such as ChatGPT, Gemini, AI Studio, Claude, and Grok are opened in Puppeteer-controlled Chrome windows.
 
 ### First Run
 
@@ -96,7 +96,7 @@ From the `Web` tab you can:
 
 ## Provider Support Matrix
 
-The app now exposes a provider support matrix for ChatGPT, Gemini, Claude, and Grok. It tracks:
+The app now exposes a provider support matrix for ChatGPT, Gemini, AI Studio, Claude, and Grok. It tracks:
 
 - known entry URLs
 - prompt input selector support

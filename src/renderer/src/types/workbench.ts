@@ -1,6 +1,6 @@
 export type Language = 'zh' | 'en'
 export type AiNodeKind = 'web' | 'api'
-export type AiProvider = 'chatgpt' | 'gemini' | 'claude' | 'grok' | string
+export type AiProvider = 'chatgpt' | 'gemini' | 'aistudio' | 'claude' | 'grok' | string
 export type BlueprintNodeType = 'prompt' | 'agent' | 'tool' | 'condition' | 'merge' | 'output'
 export type ChatMode = 'broadcast' | 'relay' | 'debate' | 'subagent'
 export type BlueprintEditorMode = 'form' | 'legacy'

@@ -6,6 +6,7 @@ import type { AiNode } from '../types/workbench'
 const PROVIDER_OPTIONS = [
   { value: 'chatgpt', label: 'ChatGPT' },
   { value: 'gemini', label: 'Gemini' },
+  { value: 'aistudio', label: 'AI Studio' },
   { value: 'claude', label: 'Claude' },
   { value: 'grok', label: 'Grok' },
   { value: 'openai', label: 'OpenAI' },
@@ -211,7 +212,7 @@ export function AiNodesPage() {
                     <input
                       value={activeNode.model || ''}
                       onChange={event => handleUpdate({ model: event.target.value })}
-                      placeholder="gpt-4o / gemini 2.5 pro / claude sonnet"
+                      placeholder="gpt-4o / gemini-2.5-pro / gemma-3 / claude sonnet"
                     />
                   </label>
                   <label>

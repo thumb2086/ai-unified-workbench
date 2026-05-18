@@ -385,7 +385,7 @@ export function WebviewPool() {
                         model: event.target.value,
                         updatedAt: new Date().toISOString(),
                       }))}
-                      placeholder="gpt-4o / gemini 2.5 pro / claude sonnet"
+                      placeholder="gpt-4o / gemini-2.5-pro / gemma-3 / claude sonnet"
                     />
                   </label>
                 </div>
@@ -508,6 +508,7 @@ function getDefaultUrl(provider: string): string {
   const urls: Record<string, string> = {
     chatgpt: 'https://chatgpt.com/',
     gemini: 'https://gemini.google.com/app',
+    aistudio: 'https://aistudio.google.com/prompts/new_chat',
     claude: 'https://claude.ai/new',
     grok: 'https://grok.com/',
   }
@@ -518,6 +519,7 @@ function getProviderName(provider: string): string {
   const names: Record<string, string> = {
     chatgpt: 'ChatGPT',
     gemini: 'Gemini',
+    aistudio: 'AI Studio',
     claude: 'Claude',
     grok: 'Grok',
   }
@@ -528,6 +530,7 @@ function getProviderMark(provider: string): string {
   const marks: Record<string, string> = {
     chatgpt: 'GPT',
     gemini: 'Gem',
+    aistudio: 'AIS',
     claude: 'Cl',
     grok: 'G',
   }

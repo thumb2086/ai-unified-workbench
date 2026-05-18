@@ -76,6 +76,13 @@ const BROWSER_SITE_CONFIGS: Record<string, {
     sendKey: 'Enter',
     waitForResponse: 3000,
   },
+  aistudio: {
+    inputSelector: 'textarea[aria-label*="Prompt"], textarea[placeholder*="prompt"], [contenteditable="true"]',
+    sendButtonSelector: 'button[aria-label*="Run"], button[aria-label*="Send"], button[type="submit"]',
+    responseSelector: '.response-content, .message-content, [data-testid="generated-response"]',
+    sendKey: 'Enter',
+    waitForResponse: 3500,
+  },
   claude: {
     inputSelector: 'textarea[placeholder*="Message"], textarea[placeholder*="Ask"], [contenteditable="true"]',
     sendButtonSelector: 'button[type="submit"], button[aria-label*="Send"]',
@@ -204,7 +211,7 @@ async function handleInjectScript(
 interface SendPromptPayload {
   slotId: string
   prompt: string
-  provider: 'chatgpt' | 'gemini' | 'claude' | 'grok'
+  provider: 'chatgpt' | 'gemini' | 'aistudio' | 'claude' | 'grok'
 }
 
 async function handleSendPrompt(
@@ -240,6 +247,21 @@ async function handleSendPrompt(
           return { injected: true, provider: 'gemini' };
         }
         return { injected: false, error: 'Editor not found' };
+      `,
+      aistudio: `
+        const input = document.querySelector('textarea[aria-label*="Prompt"], textarea[placeholder*="prompt"], [contenteditable="true"][role="textbox"], [contenteditable="true"]');
+        if (input) {
+          if (input.value !== undefined) {
+            input.value = ${JSON.stringify(payload.prompt)};
+          } else {
+            input.innerText = ${JSON.stringify(payload.prompt)};
+          }
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+          const sendBtn = document.querySelector('button[aria-label*="Run"], button[aria-label*="Send"], button[type="submit"]');
+          if (sendBtn) sendBtn.click();
+          return { injected: true, provider: 'aistudio' };
+        }
+        return { injected: false, error: 'Input not found' };
       `,
       claude: `
         const textarea = document.querySelector('div[contenteditable="true"]');

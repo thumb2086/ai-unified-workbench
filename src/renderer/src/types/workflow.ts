@@ -12,7 +12,7 @@ export interface WorkflowNode {
   // For 'agent' nodes
   agent?: {
     slotId?: string
-    provider?: 'chatgpt' | 'gemini' | 'claude' | 'grok' | string
+    provider?: 'chatgpt' | 'gemini' | 'aistudio' | 'claude' | 'grok' | string
     aiNodeId?: string
     role?: string
   }

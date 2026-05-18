@@ -364,6 +364,7 @@ function resolveAiNode(node: WorkflowNode, aiNodes: AiNode[] = []): AiNode | und
 const DEFAULT_PROVIDER_URLS: Record<string, string> = {
   chatgpt: 'https://chatgpt.com/',
   gemini: 'https://gemini.google.com/app',
+  aistudio: 'https://aistudio.google.com/prompts/new_chat',
   claude: 'https://claude.ai/new',
   grok: 'https://grok.com/',
 }

@@ -91,6 +91,21 @@ const PROVIDER_CONFIGS: Record<string, ProviderAutomationConfig> = {
       'Gemini 介面變動偏快，模型選單 selector 需要持續維護。',
     ],
   },
+  aistudio: {
+    inputSelector: 'textarea[aria-label*="Prompt"], textarea[placeholder*="prompt"], [contenteditable="true"][role="textbox"], [contenteditable="true"]',
+    sendButtonSelector: 'button[aria-label*="Run"], button[aria-label*="Send"], button[type="submit"]',
+    responseSelector: '[data-testid="generated-response"], .response-content, .markdown, .prose',
+    waitForResponse: 4000,
+    sendKey: 'Enter',
+    modelMenuSelector: 'button[aria-label*="Model"], div[role="button"][aria-label*="Model"], mat-select',
+    modelOptionSelector: '[role="option"], mat-option, button',
+    supportedEntryUrls: ['https://aistudio.google.com/prompts/new_chat', 'https://aistudio.google.com/app/prompts/new_chat'],
+    supportsModelSelection: true,
+    notes: [
+      'AI Studio 採用與 Gemini 相近的 Google 介面結構，優先支援 prompts/new_chat 入口。',
+      '模型切換與輸入框 selector 目前為 best-effort，仍需登入後依實際 DOM 微調。',
+    ],
+  },
   claude: {
     inputSelector: 'div[contenteditable="true"], textarea[placeholder*="Message"], [contenteditable="true"]',
     sendButtonSelector: 'button[type="submit"], button[aria-label*="Send"]',
@@ -448,6 +463,7 @@ function getProviderName(providerId: string): string {
   const names: Record<string, string> = {
     chatgpt: 'ChatGPT',
     gemini: 'Gemini',
+    aistudio: 'AI Studio',
     claude: 'Claude',
     grok: 'Grok',
   }
