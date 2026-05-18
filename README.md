@@ -22,13 +22,13 @@ Desktop AI workbench built with Electron + React. This version uses a Puppeteer-
 1. Install dependencies:
 
 ```bash
-npm install
+pnpm install
 ```
 
 2. Start the desktop app in development:
 
 ```bash
-npm run dev:electron
+pnpm dev:electron
 ```
 
 This launches:
@@ -41,7 +41,7 @@ This launches:
 If you still need the local Node API from the older architecture:
 
 ```bash
-npm run server
+pnpm server
 ```
 
 ### Packaged Build
@@ -49,7 +49,7 @@ npm run server
 Build the desktop app:
 
 ```bash
-npm run build
+pnpm build
 ```
 
 Artifacts are written to:
