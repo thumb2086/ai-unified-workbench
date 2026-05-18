@@ -70,7 +70,7 @@ export async function testConnection(provider: ProviderConfig): Promise<{ succes
 export async function openBrowser(
   providerId: string,
   url: string,
-  options?: { providerName?: string; sessionId?: string; forceNew?: boolean; accountLabel?: string; accountKey?: string },
+  options?: { providerName?: string; sessionId?: string; forceNew?: boolean; accountLabel?: string; accountKey?: string; model?: string },
 ): Promise<{ sessionId?: string; error?: string }> {
   try {
     const session = createBrowserSessionRecord(
@@ -96,6 +96,7 @@ export async function openBrowser(
       forceNew: options?.forceNew,
       accountLabel: options?.accountLabel,
       accountKey: options?.accountKey,
+      model: options?.model,
     })
 
     if (data.error || !data.sessionId) {
@@ -146,6 +147,20 @@ export async function sendToBrowser(sessionId: string, prompt: string): Promise<
     }
 
     return { status: response.data?.status || 'sent' }
+  } catch (err: any) {
+    return { error: err.message }
+  }
+}
+
+export async function setBrowserModel(sessionId: string, model: string): Promise<{ status?: string; error?: string }> {
+  try {
+    if (typeof window === 'undefined' || !window.aiWorkbench?.setSessionModel) {
+      return { error: 'Browser session API is unavailable' }
+    }
+    const result = await window.aiWorkbench.setSessionModel(sessionId, model)
+    return result.success
+      ? { status: String(result.data && typeof result.data === 'object' ? (result.data as any).status || 'applied' : 'applied') }
+      : { error: result.error }
   } catch (err: any) {
     return { error: err.message }
   }
@@ -275,6 +290,21 @@ export async function listRemoteBrowserSessions(): Promise<Array<{
   return window.aiWorkbench.listSessions()
 }
 
+export async function listBrowserProviderMatrix(): Promise<Array<{
+  providerId: string
+  providerName: string
+  supportsPromptInput: boolean
+  supportsResponseRead: boolean
+  supportsModelSelection: boolean
+  supportedEntryUrls: string[]
+  notes: string[]
+}>> {
+  if (typeof window === 'undefined' || !window.aiWorkbench?.listProviderMatrix) {
+    return []
+  }
+  return window.aiWorkbench.listProviderMatrix()
+}
+
 export async function closeAllBrowsers(): Promise<void> {
   try {
     await invokeBrowserCloseAll()
@@ -283,7 +313,7 @@ export async function closeAllBrowsers(): Promise<void> {
   }
 }
 
-async function invokeBrowserOpen(payload: { providerId: string; url: string; sessionId?: string; providerName?: string; forceNew?: boolean; accountLabel?: string; accountKey?: string }): Promise<{ sessionId?: string; providerId?: string; url?: string; status?: string; error?: string }> {
+async function invokeBrowserOpen(payload: { providerId: string; url: string; sessionId?: string; providerName?: string; forceNew?: boolean; accountLabel?: string; accountKey?: string; model?: string }): Promise<{ sessionId?: string; providerId?: string; url?: string; status?: string; error?: string }> {
   if (typeof window === 'undefined' || !window.aiWorkbench?.openSession) {
     return { error: 'Browser session API is unavailable' }
   }

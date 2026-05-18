@@ -13,9 +13,11 @@ import {
 import {
   clearBrowserSession,
   closeBrowserSession,
+  listBrowserProviderMatrix,
   listRemoteBrowserSessions,
   openBrowser,
   readFromBrowser,
+  setBrowserModel,
   sendToBrowser,
 } from '../../services/api'
 import './WebviewPool.css'
@@ -24,6 +26,16 @@ type ProviderGroup = {
   providerId: string
   providerName: string
   nodes: AiNode[]
+}
+
+type ProviderMatrixEntry = {
+  providerId: string
+  providerName: string
+  supportsPromptInput: boolean
+  supportsResponseRead: boolean
+  supportsModelSelection: boolean
+  supportedEntryUrls: string[]
+  notes: string[]
 }
 
 export function WebviewPool() {
@@ -37,6 +49,8 @@ export function WebviewPool() {
   const [promptDraft, setPromptDraft] = useState('')
   const [responseText, setResponseText] = useState('')
   const [busySessionId, setBusySessionId] = useState<string | null>(null)
+  const [providerMatrix, setProviderMatrix] = useState<ProviderMatrixEntry[]>([])
+  const [modelStatus, setModelStatus] = useState('')
 
   useEffect(() => {
     saveBrowserSessions(sessions)
@@ -62,11 +76,16 @@ export function WebviewPool() {
 
   useEffect(() => {
     void refreshRemoteSessions()
+    void refreshProviderMatrix()
   }, [])
+
+  useEffect(() => {
+    setModelStatus('')
+  }, [selectedNodeId])
 
   const selectedGroup = groups.find(group => group.providerId === selectedProviderId) ?? groups[0] ?? null
   const selectedNode = selectedGroup?.nodes.find(node => node.id === selectedNodeId) ?? selectedGroup?.nodes[0] ?? null
-  const selectedSession = selectedNode?.sessionId ? sessions.find(item => item.sessionId === selectedNode.sessionId) ?? null : null
+  const selectedMatrix = providerMatrix.find(item => item.providerId === selectedNode?.provider) ?? null
 
   const createWebNode = () => {
     const node = addAiNode('web')
@@ -92,6 +111,10 @@ export function WebviewPool() {
     setSessions(current => mergeSessions(current, mapped))
   }
 
+  const refreshProviderMatrix = async () => {
+    setProviderMatrix(await listBrowserProviderMatrix())
+  }
+
   const ensureSession = async (node: AiNode, forceNew = false) => {
     const url = node.webUrl || getDefaultUrl(node.provider)
     const result = await openBrowser(node.provider, url, {
@@ -100,6 +123,7 @@ export function WebviewPool() {
       forceNew,
       accountLabel: node.accountLabel,
       accountKey: node.accountKey,
+      model: node.model,
     })
 
     if (result.error || !result.sessionId) {
@@ -180,6 +204,32 @@ export function WebviewPool() {
     }
   }
 
+  const handleApplyModel = async () => {
+    if (!selectedNode?.model?.trim()) return
+
+    if (!selectedNode.sessionId) {
+      setModelStatus(t('webControl.modelStatusSaved'))
+      return
+    }
+
+    setBusySessionId(selectedNode.sessionId)
+    try {
+      const result = await setBrowserModel(selectedNode.sessionId, selectedNode.model)
+      if (result.error) {
+        window.alert(result.error)
+        return
+      }
+      setModelStatus(
+        result.status === 'saved-preference-only'
+          ? t('webControl.modelStatusSaved')
+          : t('webControl.modelStatusApplied'),
+      )
+      await refreshRemoteSessions()
+    } finally {
+      setBusySessionId(null)
+    }
+  }
+
   const handleCloseSession = async () => {
     if (!selectedNode?.sessionId) return
     await closeBrowserSession(selectedNode.sessionId)
@@ -207,7 +257,6 @@ export function WebviewPool() {
     <div className="controlled-web-page">
       <div className="controlled-web-sidebar">
         <div>
-          <h2>Browser Control</h2>
           <h2>{t('webControl.title')}</h2>
           <p className="muted">{t('webControl.subtitle')}</p>
         </div>
@@ -247,7 +296,7 @@ export function WebviewPool() {
             <div className="node-tab-strip">
               {selectedGroup.nodes.map(node => {
                 const session = node.sessionId ? sessions.find(item => item.sessionId === node.sessionId) : null
-                const status = session?.status || 'loading'
+                const status = session?.status || t('webControl.statusLoading')
                 return (
                   <button
                     key={node.id}
@@ -261,7 +310,7 @@ export function WebviewPool() {
                       <strong>{node.name}</strong>
                       <small>{node.accountLabel || node.provider}</small>
                     </span>
-                    <span className={`session-state ${status}`}>{status}</span>
+                    <span className={`session-state ${session?.status || 'loading'}`}>{status}</span>
                   </button>
                 )
               })}
@@ -327,6 +376,25 @@ export function WebviewPool() {
                       }))}
                     />
                   </label>
+                  <label>
+                    <span>{t('nodes.browserModel')}</span>
+                    <input
+                      value={selectedNode.model || ''}
+                      onChange={event => updateAiNode(selectedNode.id, current => ({
+                        ...current,
+                        model: event.target.value,
+                        updatedAt: new Date().toISOString(),
+                      }))}
+                      placeholder="gpt-4o / gemini 2.5 pro / claude sonnet"
+                    />
+                  </label>
+                </div>
+                <p className="muted">{t('nodes.browserModelHint')}</p>
+                <div className="row">
+                  <button onClick={() => void handleApplyModel()} disabled={!selectedNode.model?.trim()}>
+                    {t('webControl.applyModel')}
+                  </button>
+                  {modelStatus ? <span className="muted">{modelStatus}</span> : null}
                 </div>
               </div>
 
@@ -352,6 +420,40 @@ export function WebviewPool() {
                   <strong>{t('webControl.latestResponse')}</strong>
                 </div>
                 <pre style={{ whiteSpace: 'pre-wrap', minHeight: 180 }}>{responseText || t('webControl.noResponse')}</pre>
+              </div>
+
+              <div className="card stack">
+                <div className="panel-head">
+                  <strong>{t('webControl.supportMatrix')}</strong>
+                </div>
+                {!selectedMatrix ? (
+                  <p className="muted">{t('common.loading')}</p>
+                ) : (
+                  <>
+                    <div className="form-grid">
+                      <label>
+                        <span>{t('webControl.capabilityPrompt')}</span>
+                        <input value={selectedMatrix.supportsPromptInput ? t('webControl.yes') : t('webControl.no')} readOnly />
+                      </label>
+                      <label>
+                        <span>{t('webControl.capabilityResponse')}</span>
+                        <input value={selectedMatrix.supportsResponseRead ? t('webControl.yes') : t('webControl.no')} readOnly />
+                      </label>
+                      <label>
+                        <span>{t('webControl.capabilityModel')}</span>
+                        <input value={selectedMatrix.supportsModelSelection ? t('webControl.yes') : t('webControl.no')} readOnly />
+                      </label>
+                    </div>
+                    <label className="stack">
+                      <span>{t('webControl.entryUrls')}</span>
+                      <textarea value={selectedMatrix.supportedEntryUrls.join('\n')} readOnly style={{ minHeight: 88 }} />
+                    </label>
+                    <label className="stack">
+                      <span>{t('webControl.notes')}</span>
+                      <textarea value={selectedMatrix.notes.join('\n')} readOnly style={{ minHeight: 110 }} />
+                    </label>
+                  </>
+                )}
               </div>
 
               <div className="card stack">

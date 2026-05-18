@@ -21,6 +21,17 @@ export interface BrowserSessionOpenPayload {
   forceNew?: boolean
   accountLabel?: string
   accountKey?: string
+  model?: string
+}
+
+export interface BrowserProviderMatrixEntry {
+  providerId: string
+  providerName: string
+  supportsPromptInput: boolean
+  supportsResponseRead: boolean
+  supportsModelSelection: boolean
+  supportedEntryUrls: string[]
+  notes: string[]
 }
 
 export interface ToolResult {
@@ -111,7 +122,15 @@ const aiWorkbenchAPI = {
     return ipcRenderer.invoke('browser:list')
   },
 
-  async browserOpen(payload: { providerId: string; url: string; sessionId?: string; providerName?: string; forceNew?: boolean; accountLabel?: string; accountKey?: string }): Promise<{ sessionId?: string; providerId?: string; url?: string; status?: string; error?: string }> {
+  async listProviderMatrix(): Promise<BrowserProviderMatrixEntry[]> {
+    return ipcRenderer.invoke('browser:provider-matrix')
+  },
+
+  async setSessionModel(sessionId: string, model: string): Promise<ToolResult> {
+    return ipcRenderer.invoke('browser:set-model', { sessionId, model })
+  },
+
+  async browserOpen(payload: { providerId: string; url: string; sessionId?: string; providerName?: string; forceNew?: boolean; accountLabel?: string; accountKey?: string; model?: string }): Promise<{ sessionId?: string; providerId?: string; url?: string; status?: string; error?: string }> {
     return aiWorkbenchAPI.openSession(payload)
   },
 

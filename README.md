@@ -90,8 +90,20 @@ From the `Web` tab you can:
 - force a new session
 - send a prompt
 - read the latest response
+- set a preferred browser-side model name
 - close a session
 - clear the stored browser profile
+
+## Provider Support Matrix
+
+The app now exposes a provider support matrix for ChatGPT, Gemini, Claude, and Grok. It tracks:
+
+- known entry URLs
+- prompt input selector support
+- response read selector support
+- best-effort model switching hooks
+
+Model switching is currently **best-effort**. The selector registry is wired up, but live authenticated DOM verification still needs to be completed provider by provider.
 
 ## Blueprint Builder
 

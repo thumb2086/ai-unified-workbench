@@ -13,6 +13,7 @@ export interface BrowserSessionSummary {
   createdAt: number
   updatedAt: number
   hasPrompt: boolean
+  preferredModel?: string
 }
 
 interface BrowserSessionState extends BrowserSessionSummary {
@@ -30,6 +31,17 @@ interface BrowserOpenPayload {
   forceNew?: boolean
   accountLabel?: string
   accountKey?: string
+  model?: string
+}
+
+export interface ProviderAutomationMatrix {
+  providerId: string
+  providerName: string
+  supportsPromptInput: boolean
+  supportsResponseRead: boolean
+  supportsModelSelection: boolean
+  supportedEntryUrls: string[]
+  notes: string[]
 }
 
 interface ProviderAutomationConfig {
@@ -38,6 +50,11 @@ interface ProviderAutomationConfig {
   responseSelector?: string
   waitForResponse?: number
   sendKey?: string
+  modelMenuSelector?: string
+  modelOptionSelector?: string
+  supportedEntryUrls: string[]
+  notes: string[]
+  supportsModelSelection?: boolean
 }
 
 const SESSION_ROOT = path.join(process.cwd(), '.browser-profiles')
@@ -50,6 +67,14 @@ const PROVIDER_CONFIGS: Record<string, ProviderAutomationConfig> = {
     responseSelector: '[data-message-author-role="assistant"]:last-child, .markdown:last-child',
     waitForResponse: 3500,
     sendKey: 'Enter',
+    modelMenuSelector: 'button[data-testid*="model"], button[aria-label*="model"]',
+    modelOptionSelector: '[role="menuitem"], [role="option"], button',
+    supportedEntryUrls: ['https://chatgpt.com/', 'https://chat.openai.com/'],
+    supportsModelSelection: true,
+    notes: [
+      '已整理常用入口網址、輸入框與送出按鈕 selector。',
+      '模型切換目前是 best-effort，仍需要登入後實站驗證。',
+    ],
   },
   gemini: {
     inputSelector: 'textarea[placeholder*="Enter"], [contenteditable="true"][role="textbox"], [contenteditable="true"]',
@@ -57,6 +82,14 @@ const PROVIDER_CONFIGS: Record<string, ProviderAutomationConfig> = {
     responseSelector: '.response-content, .message-content, [data-testid="response"]',
     waitForResponse: 3500,
     sendKey: 'Enter',
+    modelMenuSelector: 'button[aria-label*="model"], div[role="button"][aria-label*="model"], mat-select',
+    modelOptionSelector: '[role="option"], mat-option, button',
+    supportedEntryUrls: ['https://gemini.google.com/app'],
+    supportsModelSelection: true,
+    notes: [
+      '已整理 Gemini App 入口與主要輸入區 selector。',
+      'Gemini 介面變動偏快，模型選單 selector 需要持續維護。',
+    ],
   },
   claude: {
     inputSelector: 'div[contenteditable="true"], textarea[placeholder*="Message"], [contenteditable="true"]',
@@ -64,6 +97,14 @@ const PROVIDER_CONFIGS: Record<string, ProviderAutomationConfig> = {
     responseSelector: '.font-claude-message, .claude-message, .message-content, [data-testid="assistant-message"]',
     waitForResponse: 4500,
     sendKey: 'Enter',
+    modelMenuSelector: 'button[aria-label*="model"], button[data-testid*="model"]',
+    modelOptionSelector: '[role="menuitemradio"], [role="option"], button',
+    supportedEntryUrls: ['https://claude.ai/new', 'https://claude.ai/chats'],
+    supportsModelSelection: true,
+    notes: [
+      '已整理 Claude 新對話頁與 chats 入口。',
+      'Claude 模型切換 selector 已預留，但仍需登入後逐站驗證。',
+    ],
   },
   grok: {
     inputSelector: 'textarea, [contenteditable="true"], input[type="text"]',
@@ -71,13 +112,21 @@ const PROVIDER_CONFIGS: Record<string, ProviderAutomationConfig> = {
     responseSelector: '.message-content, .response, [data-testid="response"]',
     waitForResponse: 3500,
     sendKey: 'Enter',
+    modelMenuSelector: 'button[aria-label*="model"], button[data-testid*="model"]',
+    modelOptionSelector: '[role="menuitem"], [role="option"], button',
+    supportedEntryUrls: ['https://grok.com/'],
+    supportsModelSelection: true,
+    notes: [
+      '已整理 Grok 首頁輸入框與回覆區 selector。',
+      'Grok 的模型切換同樣屬 best-effort，需要實際帳號驗證。',
+    ],
   },
 }
 
 export async function openBrowserSession(
   payload: BrowserOpenPayload,
 ): Promise<{ sessionId?: string; providerId?: string; url?: string; status?: string; error?: string }> {
-  const { providerId, url, providerName, forceNew, accountLabel, accountKey } = payload
+  const { providerId, url, providerName, forceNew, accountLabel, accountKey, model } = payload
   const sessionId = payload.sessionId || `session_${providerId}_${Date.now()}`
   if (!providerId || !url) {
     return { error: 'Missing providerId or url' }
@@ -92,6 +141,10 @@ export async function openBrowserSession(
       current.providerName = providerName || current.providerName
       current.accountLabel = accountLabel
       current.accountKey = accountKey
+      current.preferredModel = model || current.preferredModel
+      if (model) {
+        await applyModelSelection(current.page, current.providerId, model).catch(() => undefined)
+      }
       return {
         sessionId: current.id,
         providerId: current.providerId,
@@ -116,19 +169,23 @@ export async function openBrowserSession(
     const summary: BrowserSessionState = {
       id: sessionId,
       providerId,
-      providerName: providerName || providerId,
+      providerName: providerName || getProviderName(providerId),
       url: page.url() || url,
       accountLabel,
       accountKey,
       createdAt: Date.now(),
       updatedAt: Date.now(),
       hasPrompt: false,
+      preferredModel: model,
       browser,
       page,
       userDataDir,
     }
 
     sessions.set(sessionId, summary)
+    if (model) {
+      await applyModelSelection(page, providerId, model).catch(() => undefined)
+    }
     browser.on('disconnected', () => {
       sessions.delete(sessionId)
     })
@@ -160,6 +217,9 @@ export async function sendPromptToBrowserSession(
 
   try {
     await session.page.bringToFront().catch(() => undefined)
+    if (session.preferredModel) {
+      await applyModelSelection(session.page, session.providerId, session.preferredModel).catch(() => undefined)
+    }
     await session.page.waitForSelector(config.inputSelector, { timeout: 15000 })
     const result = await session.page.evaluate(
       ({ nextPrompt, providerConfig }) => {
@@ -242,8 +302,7 @@ export async function readBrowserSessionResponse(
     }
 
     const content = await session.page.evaluate((responseSelector) => {
-      const runtime = globalThis as any
-      const doc = runtime.document as any
+      const doc = (globalThis as any).document as any
       const matches = Array.from(doc.querySelectorAll(responseSelector))
       const last = matches[matches.length - 1] as any
       return last?.innerText || last?.textContent || ''
@@ -265,6 +324,46 @@ export function listBrowserSessions(): BrowserSessionSummary[] {
     ...summary,
     hasPrompt: Boolean(lastPrompt),
   }))
+}
+
+export function listProviderAutomationMatrix(): ProviderAutomationMatrix[] {
+  return Object.entries(PROVIDER_CONFIGS).map(([providerId, config]) => ({
+    providerId,
+    providerName: getProviderName(providerId),
+    supportsPromptInput: Boolean(config.inputSelector),
+    supportsResponseRead: Boolean(config.responseSelector),
+    supportsModelSelection: Boolean(config.supportsModelSelection && config.modelMenuSelector && config.modelOptionSelector),
+    supportedEntryUrls: config.supportedEntryUrls,
+    notes: config.notes,
+  }))
+}
+
+export async function setBrowserSessionModel(
+  sessionId: string,
+  model: string,
+): Promise<{ success: boolean; data?: unknown; error?: string }> {
+  const session = sessions.get(sessionId)
+  if (!session) {
+    return { success: false, error: 'Session not found' }
+  }
+  if (!model.trim()) {
+    return { success: false, error: 'Model is required' }
+  }
+
+  try {
+    const applied = await applyModelSelection(session.page, session.providerId, model)
+    session.preferredModel = model
+    session.updatedAt = Date.now()
+    return {
+      success: true,
+      data: {
+        status: applied ? 'applied' : 'saved-preference-only',
+        model,
+      },
+    }
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Failed to set model' }
+  }
 }
 
 export async function closeBrowserSession(sessionId: string): Promise<{ success: boolean; data?: unknown; error?: string }> {
@@ -343,6 +442,58 @@ function buildProfileFolderName(sessionId: string, accountKey?: string): string 
 
 function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+function getProviderName(providerId: string): string {
+  const names: Record<string, string> = {
+    chatgpt: 'ChatGPT',
+    gemini: 'Gemini',
+    claude: 'Claude',
+    grok: 'Grok',
+  }
+  return names[providerId] || providerId
+}
+
+async function applyModelSelection(page: Page, providerId: string, model: string): Promise<boolean> {
+  const config = PROVIDER_CONFIGS[providerId]
+  if (!config?.supportsModelSelection || !config.modelMenuSelector || !config.modelOptionSelector) {
+    return false
+  }
+
+  try {
+    await page.bringToFront().catch(() => undefined)
+    const opened = await page.evaluate(({ modelMenuSelector }) => {
+      const doc = (globalThis as any).document as any
+      const menu = doc.querySelector(modelMenuSelector) as any
+      if (!menu) return false
+      menu.click()
+      return true
+    }, { modelMenuSelector: config.modelMenuSelector })
+
+    if (!opened) return false
+    await delay(700)
+
+    const selected = await page.evaluate(({ optionSelector, targetModel }) => {
+      const doc = (globalThis as any).document as any
+      const target = String(targetModel || '').trim().toLowerCase()
+      const options = Array.from(doc.querySelectorAll(optionSelector)) as any[]
+      for (const option of options) {
+        const text = (option.innerText || option.textContent || '').trim().toLowerCase()
+        if (text && text.includes(target)) {
+          option.click()
+          return true
+        }
+      }
+      return false
+    }, {
+      optionSelector: config.modelOptionSelector,
+      targetModel: model,
+    })
+
+    return Boolean(selected)
+  } catch {
+    return false
+  }
 }
 
 export function getChromeUserDataPath(): string {

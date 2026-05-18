@@ -7,8 +7,10 @@ import {
   closeBrowserSession as closePuppeteerSession,
   getChromeUserDataPath,
   listBrowserSessions as listPuppeteerSessions,
+  listProviderAutomationMatrix,
   openBrowserSession,
   readBrowserSessionResponse,
+  setBrowserSessionModel,
   sendPromptToBrowserSession,
 } from './browser-automation-service'
 import * as fs from 'fs/promises'
@@ -135,6 +137,8 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('browser:clear', handleBrowserClear)
   ipcMain.handle('browser:close-all', handleBrowserCloseAll)
   ipcMain.handle('browser:list', handleBrowserList)
+  ipcMain.handle('browser:provider-matrix', handleBrowserProviderMatrix)
+  ipcMain.handle('browser:set-model', handleBrowserSetModel)
 
   // Chrome profiles
   ipcMain.handle('chrome:listProfiles', handleListChromeProfiles)
@@ -337,6 +341,7 @@ interface BrowserOpenPayload {
   forceNew?: boolean
   accountLabel?: string
   accountKey?: string
+  model?: string
 }
 
 async function handleBrowserOpen(
@@ -380,6 +385,17 @@ async function handleBrowserCloseAll(): Promise<ToolResult> {
 
 function handleBrowserList(): BrowserSessionSummary[] {
   return listPuppeteerSessions()
+}
+
+function handleBrowserProviderMatrix() {
+  return listProviderAutomationMatrix()
+}
+
+async function handleBrowserSetModel(
+  _event: IpcMainInvokeEvent,
+  payload: { sessionId: string; model: string },
+): Promise<ToolResult> {
+  return setBrowserSessionModel(payload.sessionId, payload.model)
 }
 
 async function createBrowserSession(

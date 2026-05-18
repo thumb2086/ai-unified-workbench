@@ -128,6 +128,7 @@ export function ChatPanel() {
       sessionId: node.sessionId,
       accountLabel: node.accountLabel,
       accountKey: node.accountKey,
+      model: node.model,
     })
     if (openResult.error || !openResult.sessionId) {
       throw new Error(openResult.error || 'Failed to open browser session')
@@ -180,8 +181,8 @@ export function ChatPanel() {
             mode === 'relay'
               ? currentPrompt
               : index === 0
-                ? `你是主代理，請先規劃整體步驟並補充背景資訊：\n${currentPrompt}`
-                : `你是子代理，請根據前一個節點的內容補充細節與可執行步驟：\n${currentPrompt}`,
+                ? `你是主分析代理，請先針對以下需求提出完整方案與初稿：\n${currentPrompt}`
+                : `請根據上一位代理的輸出繼續推進、補強、糾錯，並產出更新版本：\n${currentPrompt}`,
           )
 
           setPanelState(node.id, { status: 'done', content })
@@ -199,8 +200,8 @@ export function ChatPanel() {
           }))
 
           currentPrompt = mode === 'relay'
-            ? `${currentPrompt}\n\n${node.name}：${content}`
-            : `${content}\n\n請把以上內容整理成下一個子代理可直接使用的版本。`
+            ? `${currentPrompt}\n\n${node.name}：\n${content}`
+            : `${content}\n\n請基於上面的結果繼續完善。`
         } catch (error) {
           const message = error instanceof Error ? error.message : 'Request failed'
           setPanelState(node.id, { status: 'error', content: '', error: message })
@@ -220,8 +221,8 @@ export function ChatPanel() {
             const content = await sendToNode(
               node,
               round === 0
-                ? `請針對以下主題提出你的第一輪觀點：${debateTopic}`
-                : `請根據前面的觀點，進行第二輪回應或反駁：${debateTopic}`,
+                ? `請針對這個主題提出你的立場、論點與理由：${debateTopic}`
+                : `請回應其他觀點，補強或修正你的結論：${debateTopic}`,
             )
 
             setPanelState(node.id, { status: 'done', content })
@@ -308,7 +309,7 @@ export function ChatPanel() {
               />
               <div className="checkbox-copy">
                 <strong>{node.name}</strong>
-                <span className="muted">{node.kind.toUpperCase()} · {node.provider}</span>
+                <span className="muted">{node.kind.toUpperCase()} / {node.provider}</span>
               </div>
             </label>
           ))}
@@ -403,7 +404,7 @@ export function ChatPanel() {
                     <div className="response-head">
                       <div>
                         <strong>{node.name}</strong>
-                        <div className="muted">{node.kind.toUpperCase()} · {node.provider}</div>
+                        <div className="muted">{node.kind.toUpperCase()} / {node.provider}</div>
                       </div>
                       <span className={`pill ${panel.status}`}>{panel.status}</span>
                     </div>
@@ -420,7 +421,7 @@ export function ChatPanel() {
             <h3>{t('chat.workflowRun')}</h3>
             <span className={`pill ${workflowStatus}`}>{workflowStatus}</span>
           </div>
-          <pre className="workflow-output">{workflowResult || '尚未執行工作流。'}</pre>
+          <pre className="workflow-output">{workflowResult || '執行後結果會顯示在這裡。'}</pre>
         </section>
 
         {activeThread && (
@@ -432,7 +433,7 @@ export function ChatPanel() {
             <div className="history-list">
               {activeThread.messages.slice(-6).map(message => (
                 <div key={message.id} className={`history-item ${message.role}`}>
-                  <strong>{message.role === 'user' ? '使用者' : 'AI 回應'}</strong>
+                  <strong>{message.role === 'user' ? '使用者' : 'AI 節點'}</strong>
                   <p>{message.content}</p>
                 </div>
               ))}

@@ -106,7 +106,7 @@ export function AiNodesPage() {
               <div>
                 <h2>{activeNode.name}</h2>
                 <p className="muted">
-                  {t('common.type')}: {activeNode.kind.toUpperCase()} · {t('common.provider')}: {getProviderLabel(activeNode.provider)}
+                  {t('common.type')}: {activeNode.kind.toUpperCase()} / {t('common.provider')}: {getProviderLabel(activeNode.provider)}
                 </p>
               </div>
               <div className="row">
@@ -179,8 +179,8 @@ export function AiNodesPage() {
 
             {activeNode.kind === 'web' ? (
               <div className="card stack">
-                <div className="section-title">Web 節點設定</div>
-                <p className="muted">這裡只設定節點資料；實際開啟和切換網頁請到「控制網頁」。</p>
+                <div className="section-title">Web 瀏覽器設定</div>
+                <p className="muted">設定這個節點要綁定的網站入口、帳號標記、模型偏好與 session。</p>
                 <div className="form-grid">
                   <label>
                     <span>{t('nodes.accountLabel')}</span>
@@ -207,14 +207,23 @@ export function AiNodesPage() {
                     />
                   </label>
                   <label>
+                    <span>{t('nodes.browserModel')}</span>
+                    <input
+                      value={activeNode.model || ''}
+                      onChange={event => handleUpdate({ model: event.target.value })}
+                      placeholder="gpt-4o / gemini 2.5 pro / claude sonnet"
+                    />
+                  </label>
+                  <label>
                     <span>{t('nodes.session')}</span>
                     <input
                       value={activeNode.sessionId || ''}
                       onChange={event => handleUpdate({ sessionId: event.target.value })}
-                      placeholder="由控制網頁開啟後自動填入"
+                      placeholder="可留空，開啟後會自動綁定"
                     />
                   </label>
                 </div>
+                <p className="muted">{t('nodes.browserModelHint')}</p>
                 <label>
                   <span>{t('nodes.conversation')}</span>
                   <input

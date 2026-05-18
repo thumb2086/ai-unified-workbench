@@ -208,6 +208,7 @@ export function createDefaultExecutors(aiNodes: AiNode[] = []): Partial<Record<N
         aiNode?.name || provider,
         aiNode?.accountLabel,
         aiNode?.accountKey,
+        aiNode?.model,
       )
 
       const result = await sendToBrowser(slotId, node.prompt)
@@ -328,6 +329,7 @@ async function resolveAgentSessionId(
   providerName?: string,
   accountLabel?: string,
   accountKey?: string,
+  model?: string,
 ): Promise<string> {
   if (slotId) {
     return slotId
@@ -338,6 +340,7 @@ async function resolveAgentSessionId(
     providerName: providerName || provider,
     accountLabel,
     accountKey,
+    model,
   })
 
   if (result.error || !result.sessionId) {
